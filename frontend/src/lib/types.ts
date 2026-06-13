@@ -1,22 +1,44 @@
-export type Role =
-  | "admin"
-  | "sales"
-  | "purchase"
-  | "manufacturing"
-  | "inventory"
-  | "owner";
+export type Module = "sales" | "purchase" | "manufacturing" | "product";
+export type AccessLevel = "none" | "user" | "admin";
+
+export const MODULES: Module[] = ["sales", "purchase", "manufacturing", "product"];
 
 export interface User {
   id: number;
+  username: string;
   email: string;
   full_name: string;
-  role: Role;
+  company_id: number;
+  company_name: string;
+  is_system_admin: boolean;
+  photo: string;
+  access: Record<Module, AccessLevel>;
 }
 
 export interface AuthResponse {
   access_token: string;
   token_type: string;
   user: User;
+}
+
+export interface SignupRequestResponse {
+  pending: boolean;
+  email: string;
+  dev_otp?: string | null;
+}
+
+export interface AdminUser {
+  id: number;
+  username: string;
+  email: string;
+  full_name: string;
+  is_system_admin: boolean;
+  address: string;
+  position: string;
+  mobile_number: string;
+  photo: string;
+  is_active: boolean;
+  access: Record<Module, AccessLevel>;
 }
 
 export interface Product {
@@ -129,6 +151,44 @@ export interface ManufacturingOrder {
   created_at: string;
   components: MOComponent[];
   work_orders: WorkOrder[];
+}
+
+export interface JourneyDoc {
+  type: string;
+  name: string;
+  state: string;
+}
+
+export interface JourneyStep {
+  key: string;
+  label: string;
+  detail: string;
+  status: "done" | "current" | "pending";
+  ts: string | null;
+  docs?: JourneyDoc[];
+  auto?: boolean;
+}
+
+export interface JourneyItem {
+  name: string;
+  qty: number;
+  reserved?: number;
+  delivered?: number;
+}
+
+export interface OrderJourney {
+  order: string;
+  customer: string;
+  company?: string;
+  state?: string;
+  status_label: string;
+  percent: number;
+  order_date: string | null;
+  promise_date: string | null;
+  items: JourneyItem[];
+  total?: number;
+  steps: JourneyStep[];
+  track_path?: string;
 }
 
 export interface AtRiskOrder {

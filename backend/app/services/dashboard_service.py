@@ -5,10 +5,12 @@ from app.models.enums import MOState, PurchaseOrderState, SaleOrderState
 from app.services import inventory_service
 
 
-def get_metrics(session: Session) -> dict:
-    sos = list(session.exec(select(SaleOrder)).all())
-    pos = list(session.exec(select(PurchaseOrder)).all())
-    mos = list(session.exec(select(ManufacturingOrder)).all())
+def get_metrics(session: Session, company_id: int) -> dict:
+    sos = list(session.exec(select(SaleOrder).where(SaleOrder.company_id == company_id)).all())
+    pos = list(session.exec(select(PurchaseOrder).where(PurchaseOrder.company_id == company_id)).all())
+    mos = list(
+        session.exec(select(ManufacturingOrder).where(ManufacturingOrder.company_id == company_id)).all()
+    )
 
     pending_deliveries = sum(
         1 for so in sos if so.state in (SaleOrderState.CONFIRMED, SaleOrderState.PARTIALLY_DELIVERED)
@@ -63,7 +65,7 @@ def get_metrics(session: Session) -> dict:
     def count_state(items, *states):
         return sum(1 for it in items if it.state in states)
 
-    stock_value = _stock_value(session)
+    stock_value = _stock_value(session, company_id)
     orchestration = _orchestration(session, sos, mos, pos)
     return {
         "total_sales_orders": len(sos),
@@ -93,8 +95,8 @@ def _partner_name(session: Session, partner_id: int) -> str:
     return partner.name if partner else f"Partner #{partner_id}"
 
 
-def _stock_value(session: Session) -> float:
-    products = list(session.exec(select(Product)).all())
+def _stock_value(session: Session, company_id: int) -> float:
+    products = list(session.exec(select(Product).where(Product.company_id == company_id)).all())
     amap = inventory_service.availability_map(session, [p.id for p in products])
     return sum(max(0.0, amap[p.id]["on_hand"]) * p.cost_price for p in products)
 
@@ -149,9 +151,9 @@ def _by_state(items, enum_cls) -> list[dict]:
     return [{"state": k, "count": v} for k, v in counts.items()]
 
 
-def low_stock(session: Session, threshold: float = 10.0) -> list[dict]:
+def low_stock(session: Session, company_id: int, threshold: float = 10.0) -> list[dict]:
     """Stretch: products whose free-to-use is trending toward zero."""
-    products = list(session.exec(select(Product)).all())
+    products = list(session.exec(select(Product).where(Product.company_id == company_id)).all())
     amap = inventory_service.availability_map(session, [p.id for p in products])
     out = []
     for p in products:

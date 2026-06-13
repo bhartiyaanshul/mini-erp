@@ -16,6 +16,7 @@ import {
   Modal,
   PageHeader,
   PageLoader,
+  QtyInput,
   Select,
 } from "@/components/ui";
 
@@ -162,12 +163,10 @@ function BomForm({ onClose }: { onClose: () => void }) {
                     </option>
                   ))}
                 </Select>
-                <Input
-                  type="number"
-                  min={1}
+                <QtyInput
                   className="w-24"
                   value={l.qty}
-                  onChange={(e) => setLines((ls) => ls.map((x, idx) => (idx === i ? { ...x, qty: +e.target.value } : x)))}
+                  onChange={(qty) => setLines((ls) => ls.map((x, idx) => (idx === i ? { ...x, qty } : x)))}
                 />
                 <Button variant="ghost" size="icon" onClick={() => setLines((ls) => ls.filter((_, idx) => idx !== i))}>
                   <Trash2 className="h-4 w-4 text-slate-400" />
@@ -197,12 +196,12 @@ function BomForm({ onClose }: { onClose: () => void }) {
                   value={o.work_center}
                   onChange={(e) => setOps((os) => os.map((x, idx) => (idx === i ? { ...x, work_center: e.target.value } : x)))}
                 />
-                <Input
-                  type="number"
+                <QtyInput
+                  min={0}
                   className="w-24"
                   placeholder="mins"
                   value={o.duration_mins}
-                  onChange={(e) => setOps((os) => os.map((x, idx) => (idx === i ? { ...x, duration_mins: +e.target.value } : x)))}
+                  onChange={(duration_mins) => setOps((os) => os.map((x, idx) => (idx === i ? { ...x, duration_mins } : x)))}
                 />
                 <Button variant="ghost" size="icon" onClick={() => setOps((os) => os.filter((_, idx) => idx !== i))}>
                   <Trash2 className="h-4 w-4 text-slate-400" />

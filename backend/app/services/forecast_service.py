@@ -116,9 +116,16 @@ def compute_forecast(
 _URGENCY_RANK = {"critical": 0, "watch": 1, "ok": 2}
 
 
-def forecast_all(session: Session) -> list[dict]:
+def forecast_all(session: Session, company_id: int) -> list[dict]:
     """Forecast every demand-driven product, most urgent first."""
-    products = list(session.exec(select(Product).where(Product.procure_on_demand == True)).all())  # noqa: E712
+    products = list(
+        session.exec(
+            select(Product).where(
+                Product.company_id == company_id,
+                Product.procure_on_demand == True,  # noqa: E712
+            )
+        ).all()
+    )
     if not products:
         return []
 

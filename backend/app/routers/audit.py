@@ -2,16 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 
 from app.core.db import get_session
-from app.core.deps import get_current_user, require_role
+from app.core.deps import get_current_user, require_system_admin
 from app.models import Product, User
-from app.models.enums import MoveSource, MoveState, MoveType, UserRole
+from app.models.enums import MoveSource, MoveState, MoveType
 from app.serializers import audit_out
 from app.services import audit_service, inventory_service
 from app.services.common import fmt_qty
 
 router = APIRouter(prefix="/api/audit", tags=["audit"])
-
-view = require_role(UserRole.OWNER)
 
 
 @router.get("")
@@ -19,16 +17,17 @@ def list_logs(
     entity_type: str | None = None,
     limit: int = 200,
     session: Session = Depends(get_session),
-    _: User = Depends(view),
+    user: User = Depends(require_system_admin),
 ):
-    return [audit_out(session, a) for a in audit_service.list_logs(session, entity_type=entity_type, limit=limit)]
+    logs = audit_service.list_logs(session, company_id=user.company_id, entity_type=entity_type, limit=limit)
+    return [audit_out(session, a) for a in logs]
 
 
 @router.get("/timeline/{product_id}")
-def product_timeline(product_id: int, session: Session = Depends(get_session), _: User = Depends(get_current_user)):
+def product_timeline(product_id: int, session: Session = Depends(get_session), user: User = Depends(get_current_user)):
     """All stock movements for one product, built from the ledger."""
     product = session.get(Product, product_id)
-    if not product:
+    if not product or product.company_id != user.company_id:
         raise HTTPException(404, "Product not found")
 
     events: list[dict] = []

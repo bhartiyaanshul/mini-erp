@@ -6,6 +6,7 @@ from app.models import AuditLog
 def log(
     session: Session,
     *,
+    company_id: int,
     entity_type: str,
     entity_id: int | None,
     action: str,
@@ -15,6 +16,7 @@ def log(
 ) -> AuditLog:
     """Append an audit entry. Flush-only; the caller owns the commit."""
     entry = AuditLog(
+        company_id=company_id,
         entity_type=entity_type,
         entity_id=entity_id,
         action=action,
@@ -27,8 +29,10 @@ def log(
     return entry
 
 
-def list_logs(session: Session, *, entity_type: str | None = None, limit: int = 200) -> list[AuditLog]:
-    stmt = select(AuditLog)
+def list_logs(
+    session: Session, *, company_id: int, entity_type: str | None = None, limit: int = 200
+) -> list[AuditLog]:
+    stmt = select(AuditLog).where(AuditLog.company_id == company_id)
     if entity_type:
         stmt = stmt.where(AuditLog.entity_type == entity_type)
     stmt = stmt.order_by(desc(AuditLog.created_at)).limit(limit)

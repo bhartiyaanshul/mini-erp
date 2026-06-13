@@ -8,6 +8,7 @@ from app.models import (
     BoM,
     BoMLine,
     BoMOperation,
+    Company,
     ManufacturingOrder,
     Partner,
     Product,
@@ -17,58 +18,94 @@ from app.models import (
     SaleOrderLine,
     StockMove,
     User,
+    UserModuleAccess,
     WorkOrder,
 )
-from app.models.enums import MoveSource, MoveState, MoveType, PartnerType, ProcurementType, UserRole
+from app.models.enums import (
+    AccessLevel,
+    ModuleName,
+    MoveSource,
+    MoveState,
+    MoveType,
+    PartnerType,
+    ProcurementType,
+)
 from app.core.security import hash_password
 from app.services import inventory_service
 
 DEMO_PASSWORD = "demo1234"
+DEFAULT_COMPANY_ID = 1
+DEFAULT_COMPANY_NAME = "Shiv Furniture Works"
 
+_A = AccessLevel.ADMIN
+_U = AccessLevel.USER
+
+# (email, full_name, username, is_system_admin, {module: level})
 DEMO_USERS = [
-    ("admin@shivfurniture.com", "Aarav Admin", UserRole.ADMIN),
-    ("sales@shivfurniture.com", "Sara Sales", UserRole.SALES),
-    ("purchase@shivfurniture.com", "Priya Purchase", UserRole.PURCHASE),
-    ("mfg@shivfurniture.com", "Manish Manufacturing", UserRole.MANUFACTURING),
-    ("inventory@shivfurniture.com", "Ishan Inventory", UserRole.INVENTORY),
-    ("owner@shivfurniture.com", "Omkar Owner", UserRole.OWNER),
+    ("admin@shivfurniture.com", "Aarav Admin", "shivadmin", True, {}),
+    ("owner@shivfurniture.com", "Omkar Owner", "shivowner", True, {}),
+    ("sales@shivfurniture.com", "Sara Sales", "shivsales", False,
+     {ModuleName.SALES: _A, ModuleName.PRODUCT: _U}),
+    ("purchase@shivfurniture.com", "Priya Purchase", "shivbuyer", False,
+     {ModuleName.PURCHASE: _A, ModuleName.PRODUCT: _U}),
+    ("mfg@shivfurniture.com", "Manish Manufacturing", "shivmfg1", False,
+     {ModuleName.MANUFACTURING: _A, ModuleName.PRODUCT: _U}),
+    ("inventory@shivfurniture.com", "Ishan Inventory", "shivstock", False,
+     {ModuleName.PRODUCT: _A}),
 ]
 
 
+def ensure_default_company(session: Session) -> Company:
+    """Get-or-create the default tenant (id 1), so backfilled data has a home."""
+    company = session.get(Company, DEFAULT_COMPANY_ID)
+    if not company:
+        company = Company(id=DEFAULT_COMPANY_ID, name=DEFAULT_COMPANY_NAME)
+        session.add(company)
+        session.commit()
+        session.refresh(company)
+    return company
+
+
 def ensure_default_users(session: Session) -> None:
-    """Create the six role users if they don't exist (idempotent)."""
-    for email, name, role in DEMO_USERS:
+    """Create the demo users in the default company if absent (idempotent)."""
+    ensure_default_company(session)
+    for email, name, username, is_admin, access in DEMO_USERS:
         existing = session.exec(select(User).where(User.email == email)).first()
-        if not existing:
-            session.add(
-                User(
-                    email=email,
-                    full_name=name,
-                    hashed_password=hash_password(DEMO_PASSWORD),
-                    role=role,
-                )
-            )
+        if existing:
+            continue
+        user = User(
+            email=email,
+            username=username,
+            full_name=name,
+            hashed_password=hash_password(DEMO_PASSWORD),
+            company_id=DEFAULT_COMPANY_ID,
+            is_system_admin=is_admin,
+        )
+        session.add(user)
+        session.flush()
+        for module, level in access.items():
+            session.add(UserModuleAccess(user_id=user.id, module=module, level=level))
     session.commit()
 
 
-def _clear_business_data(session: Session) -> None:
-    # Preserve Users so the logged-in admin's session stays valid.
-    for model in (
-        StockMove,
-        SaleOrderLine,
-        SaleOrder,
-        PurchaseOrderLine,
-        PurchaseOrder,
-        WorkOrder,
-        ManufacturingOrder,
-        BoMLine,
-        BoMOperation,
-        BoM,
-        Product,
-        Partner,
-        AuditLog,
-    ):
-        session.exec(delete(model))
+def _clear_business_data(session: Session, company_id: int) -> None:
+    # Scoped to one company; preserve Users so the logged-in admin stays valid.
+    # Child rows (lines, work orders) are removed by clearing parents first.
+    so_ids = [r.id for r in session.exec(select(SaleOrder).where(SaleOrder.company_id == company_id)).all()]
+    po_ids = [r.id for r in session.exec(select(PurchaseOrder).where(PurchaseOrder.company_id == company_id)).all()]
+    mo_ids = [r.id for r in session.exec(select(ManufacturingOrder).where(ManufacturingOrder.company_id == company_id)).all()]
+    bom_ids = [r.id for r in session.exec(select(BoM).where(BoM.company_id == company_id)).all()]
+    if so_ids:
+        session.exec(delete(SaleOrderLine).where(SaleOrderLine.sale_order_id.in_(so_ids)))
+    if po_ids:
+        session.exec(delete(PurchaseOrderLine).where(PurchaseOrderLine.purchase_order_id.in_(po_ids)))
+    if mo_ids:
+        session.exec(delete(WorkOrder).where(WorkOrder.mo_id.in_(mo_ids)))
+    if bom_ids:
+        session.exec(delete(BoMLine).where(BoMLine.bom_id.in_(bom_ids)))
+        session.exec(delete(BoMOperation).where(BoMOperation.bom_id.in_(bom_ids)))
+    for model in (StockMove, SaleOrder, PurchaseOrder, ManufacturingOrder, BoM, Product, Partner, AuditLog):
+        session.exec(delete(model).where(model.company_id == company_id))
     session.commit()
 
 
@@ -89,6 +126,7 @@ def _daily_demand(base: float, day_index: int) -> int:
 
 def _seed_history(
     session: Session,
+    company_id: int,
     product_id: int,
     *,
     base_per_day: float,
@@ -109,6 +147,7 @@ def _seed_history(
 
     inventory_service.create_move(
         session,
+        company_id=company_id,
         product_id=product_id,
         qty=float(current_on_hand + total_out),
         move_type=MoveType.IN,
@@ -122,6 +161,7 @@ def _seed_history(
             continue
         inventory_service.create_move(
             session,
+            company_id=company_id,
             product_id=product_id,
             qty=float(q),
             move_type=MoveType.OUT,
@@ -132,45 +172,48 @@ def _seed_history(
         )
 
 
-def run_demo_seed(session: Session) -> dict:
+def run_demo_seed(session: Session, company_id: int = DEFAULT_COMPANY_ID) -> dict:
     """One-click 'Shiv Furniture Works' scenario, teed up for the demo.
 
+    Scoped to one company — re-seeds only that tenant's data.
     - Wooden Table (MANUFACTURE): 5 on hand. Order 20 -> reserve 5, MO for 15.
     - Office Chair (BUY): 10 on hand. Order 25 -> reserve 10, PO for 15.
     - Raw components stocked deep enough to complete the MO live.
     """
-    ensure_default_users(session)
-    _clear_business_data(session)
+    ensure_default_company(session)
+    if company_id == DEFAULT_COMPANY_ID:
+        ensure_default_users(session)
+    _clear_business_data(session, company_id)
 
     # --- Partners ---------------------------------------------------------
-    timber = Partner(name="Timber Traders", type=PartnerType.VENDOR, email="sales@timber.example", phone="900000001")
-    hardware = Partner(name="FastFix Hardware", type=PartnerType.VENDOR, email="orders@fastfix.example", phone="900000002")
-    chairco = Partner(name="ChairWorks Supply", type=PartnerType.VENDOR, email="hello@chairworks.example", phone="900000003")
-    retail = Partner(name="Retail Mart", type=PartnerType.CUSTOMER, email="buy@retailmart.example", phone="900000010")
-    office = Partner(name="Office Spaces Ltd", type=PartnerType.CUSTOMER, email="po@officespaces.example", phone="900000011")
+    timber = Partner(company_id=company_id, name="Timber Traders", type=PartnerType.VENDOR, email="sales@timber.example", phone="900000001")
+    hardware = Partner(company_id=company_id, name="FastFix Hardware", type=PartnerType.VENDOR, email="orders@fastfix.example", phone="900000002")
+    chairco = Partner(company_id=company_id, name="ChairWorks Supply", type=PartnerType.VENDOR, email="hello@chairworks.example", phone="900000003")
+    retail = Partner(company_id=company_id, name="Retail Mart", type=PartnerType.CUSTOMER, email="buy@retailmart.example", phone="900000010")
+    office = Partner(company_id=company_id, name="Office Spaces Ltd", type=PartnerType.CUSTOMER, email="po@officespaces.example", phone="900000011")
     session.add_all([timber, hardware, chairco, retail, office])
     session.flush()
 
     # --- Component products (bought) -------------------------------------
-    legs = Product(name="Wooden Legs", sku="CMP-LEG", sales_price=80, cost_price=50, uom="Units",
+    legs = Product(company_id=company_id, name="Wooden Legs", sku="CMP-LEG", sales_price=80, cost_price=50, uom="Units",
                    procure_on_demand=True, procurement_type=ProcurementType.BUY, default_vendor_id=timber.id)
-    top = Product(name="Wooden Top", sku="CMP-TOP", sales_price=600, cost_price=400, uom="Units",
+    top = Product(company_id=company_id, name="Wooden Top", sku="CMP-TOP", sales_price=600, cost_price=400, uom="Units",
                   procure_on_demand=True, procurement_type=ProcurementType.BUY, default_vendor_id=timber.id)
-    screws = Product(name="Screws", sku="CMP-SCR", sales_price=3, cost_price=2, uom="Units",
+    screws = Product(company_id=company_id, name="Screws", sku="CMP-SCR", sales_price=3, cost_price=2, uom="Units",
                      procure_on_demand=True, procurement_type=ProcurementType.BUY, default_vendor_id=hardware.id)
     session.add_all([legs, top, screws])
     session.flush()
 
     # --- Finished products -----------------------------------------------
-    table = Product(name="Wooden Table", sku="FG-TABLE", sales_price=3000, cost_price=1800, uom="Units",
+    table = Product(company_id=company_id, name="Wooden Table", sku="FG-TABLE", sales_price=3000, cost_price=1800, uom="Units",
                     procure_on_demand=True, procurement_type=ProcurementType.MANUFACTURE)
-    chair = Product(name="Office Chair", sku="FG-CHAIR", sales_price=1500, cost_price=900, uom="Units",
+    chair = Product(company_id=company_id, name="Office Chair", sku="FG-CHAIR", sales_price=1500, cost_price=900, uom="Units",
                     procure_on_demand=True, procurement_type=ProcurementType.BUY, default_vendor_id=chairco.id)
     session.add_all([table, chair])
     session.flush()
 
     # --- BoM for Wooden Table (the brief's canonical example) ------------
-    bom = BoM(name="Wooden Table BoM", product_id=table.id)
+    bom = BoM(company_id=company_id, name="Wooden Table BoM", product_id=table.id)
     session.add(bom)
     session.flush()
     session.add_all([
@@ -193,15 +236,15 @@ def run_demo_seed(session: Session) -> dict:
     # forecast has real signal while every existing flow still works.
     # Finished goods are sold; components are consumed building tables
     # (~4 legs / 1 top / 12 screws per table).
-    _seed_history(session, table.id, base_per_day=1.6, current_on_hand=5,
+    _seed_history(session, company_id, table.id, base_per_day=1.6, current_on_hand=5,
                   source=MoveSource.SALE, note="Sold (demo history)")
-    _seed_history(session, chair.id, base_per_day=2.2, current_on_hand=10,
+    _seed_history(session, company_id, chair.id, base_per_day=2.2, current_on_hand=10,
                   source=MoveSource.SALE, note="Sold (demo history)")
-    _seed_history(session, legs.id, base_per_day=8, current_on_hand=80,
+    _seed_history(session, company_id, legs.id, base_per_day=8, current_on_hand=80,
                   source=MoveSource.MANUFACTURING_CONSUME, note="Consumed in assembly (demo history)")
-    _seed_history(session, top.id, base_per_day=1.9, current_on_hand=30,
+    _seed_history(session, company_id, top.id, base_per_day=1.9, current_on_hand=30,
                   source=MoveSource.MANUFACTURING_CONSUME, note="Consumed in assembly (demo history)")
-    _seed_history(session, screws.id, base_per_day=20, current_on_hand=300,
+    _seed_history(session, company_id, screws.id, base_per_day=20, current_on_hand=300,
                   source=MoveSource.MANUFACTURING_CONSUME, note="Consumed in assembly (demo history)")
 
     session.commit()
@@ -209,7 +252,14 @@ def run_demo_seed(session: Session) -> dict:
     return {
         "message": "Demo scenario loaded: Shiv Furniture Works",
         "login_password": DEMO_PASSWORD,
-        "users": [{"email": e, "role": r.value} for e, _, r in DEMO_USERS],
+        "users": [
+            {
+                "email": email,
+                "username": username,
+                "kind": "System Administrator" if is_admin else "System User",
+            }
+            for email, _name, username, is_admin, _access in DEMO_USERS
+        ],
         "hint": {
             "mts": "Sell 3 Wooden Tables → delivers from stock (5 on hand).",
             "mto_manufacture": "Sell 20 Wooden Tables → reserves 5, auto-creates an MO for 15.",

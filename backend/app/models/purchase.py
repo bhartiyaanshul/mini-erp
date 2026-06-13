@@ -7,6 +7,7 @@ from app.models.enums import PurchaseOrderState
 
 class PurchaseOrder(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
+    company_id: int = Field(foreign_key="company.id", index=True)
     name: str = Field(default="", index=True)  # human ref e.g. PO-0001
     partner_id: int = Field(foreign_key="partner.id")
     state: PurchaseOrderState = Field(default=PurchaseOrderState.DRAFT, index=True)

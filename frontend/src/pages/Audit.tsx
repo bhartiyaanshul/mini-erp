@@ -1,8 +1,9 @@
-import { useState } from "react";
-import { ScrollText } from "lucide-react";
+import { useMemo } from "react";
+import { ScrollText, Boxes, Calendar, Zap } from "lucide-react";
 import { useAudit } from "@/lib/queries";
-import { Badge, Card, EmptyState, PageHeader, PageLoader, Select } from "@/components/ui";
+import { Badge, Card, EmptyState, PageHeader, PageLoader } from "@/components/ui";
 import { fmtDateTime, titleCase } from "@/lib/utils";
+import { DATE_PRESETS, ListToolbar, NoResults, matchesDatePreset, toOptions, useListControls } from "@/components/list-view";
 
 const ENTITY_FILTERS = [
   { value: "", label: "All entities" },
@@ -27,29 +28,46 @@ const ACTION_COLOR: Record<string, string> = {
 };
 
 export default function Audit() {
-  const [entityType, setEntityType] = useState("");
-  const { data: logs, isLoading } = useAudit(entityType || undefined);
+  const controls = useListControls("audit");
+  // The entity facet is server-driven; everything else filters client-side.
+  const entityType = controls.filters.entity || undefined;
+  const { data: logs, isLoading } = useAudit(entityType);
+
+  const filtered = useMemo(() => {
+    const q = controls.query.trim().toLowerCase();
+    return (logs ?? []).filter((l) => {
+      if (q && !`${l.description} ${l.user_name ?? ""} ${l.entity_type} ${l.action}`.toLowerCase().includes(q)) return false;
+      if (controls.filters.action && l.action !== controls.filters.action) return false;
+      if (!matchesDatePreset(l.created_at, controls.filters.date)) return false;
+      return true;
+    });
+  }, [logs, controls.query, controls.filters]);
 
   return (
     <div>
       <PageHeader
         title="Audit Log"
         subtitle="Every significant change — who, when, and what — for end-to-end traceability."
-        action={
-          <Select value={entityType} onChange={(e) => setEntityType(e.target.value)} className="w-48">
-            {ENTITY_FILTERS.map((f) => (
-              <option key={f.value} value={f.value}>
-                {f.label}
-              </option>
-            ))}
-          </Select>
-        }
+      />
+
+      <ListToolbar
+        controls={controls}
+        gridCapable={false}
+        count={filtered.length}
+        searchPlaceholder="Search by detail, actor or action…"
+        filters={[
+          { key: "entity", label: "Entities", icon: Boxes, options: ENTITY_FILTERS },
+          { key: "action", label: "Actions", icon: Zap, options: toOptions(Object.keys(ACTION_COLOR)) },
+          { key: "date", label: "Date", icon: Calendar, options: DATE_PRESETS },
+        ]}
       />
 
       {isLoading ? (
         <PageLoader />
       ) : !logs?.length ? (
         <EmptyState icon={<ScrollText className="h-10 w-10" />} title="No audit entries" hint="Actions across the system will appear here." />
+      ) : !filtered.length ? (
+        <NoResults onReset={controls.reset} />
       ) : (
         <Card>
           <div className="overflow-x-auto">
@@ -64,7 +82,7 @@ export default function Audit() {
                 </tr>
               </thead>
               <tbody>
-                {logs.map((l) => (
+                {filtered.map((l) => (
                   <tr key={l.id} className="border-b border-slate-50">
                     <td className="whitespace-nowrap px-5 py-3 text-slate-500">{fmtDateTime(l.created_at)}</td>
                     <td className="px-5 py-3 text-slate-600">{l.user_name || "System"}</td>

@@ -8,39 +8,32 @@ import {
   Users,
   Boxes,
   ScrollText,
+  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
-import type { Role } from "./types";
+import type { User } from "./types";
+import { canView } from "./access";
 
 export interface NavItem {
   to: string;
   label: string;
   icon: LucideIcon;
-  roles?: Role[]; // undefined => everyone (admin always sees all)
+  visible: (user: User) => boolean;
 }
 
 export const NAV: NavItem[] = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/sales", label: "Sales", icon: ShoppingCart, roles: ["sales"] },
-  { to: "/purchase", label: "Purchase", icon: Truck, roles: ["purchase"] },
-  { to: "/manufacturing", label: "Manufacturing", icon: Factory, roles: ["manufacturing"] },
-  { to: "/boms", label: "Bill of Materials", icon: ListTree, roles: ["manufacturing", "owner"] },
-  { to: "/products", label: "Products", icon: Package },
-  { to: "/inventory", label: "Inventory", icon: Boxes, roles: ["inventory", "owner"] },
-  { to: "/partners", label: "Partners", icon: Users, roles: ["sales", "purchase", "owner"] },
-  { to: "/audit", label: "Audit Log", icon: ScrollText, roles: ["owner"] },
+  { to: "/", label: "Dashboard", icon: LayoutDashboard, visible: () => true },
+  { to: "/sales", label: "Sales", icon: ShoppingCart, visible: (u) => canView(u, "sales") },
+  { to: "/purchase", label: "Purchase", icon: Truck, visible: (u) => canView(u, "purchase") },
+  { to: "/manufacturing", label: "Manufacturing", icon: Factory, visible: (u) => canView(u, "manufacturing") },
+  { to: "/boms", label: "Bill of Materials", icon: ListTree, visible: (u) => canView(u, "manufacturing") },
+  { to: "/products", label: "Products", icon: Package, visible: () => true },
+  { to: "/inventory", label: "Inventory", icon: Boxes, visible: (u) => canView(u, "product") },
+  { to: "/partners", label: "Partners", icon: Users, visible: (u) => canView(u, "sales") || canView(u, "purchase") },
+  { to: "/users", label: "User Management", icon: ShieldCheck, visible: (u) => u.is_system_admin },
+  { to: "/audit", label: "Audit Log", icon: ScrollText, visible: (u) => u.is_system_admin },
 ];
 
-export function navForRole(role: Role): NavItem[] {
-  if (role === "admin") return NAV;
-  return NAV.filter((n) => !n.roles || n.roles.includes(role));
+export function navForUser(user: User): NavItem[] {
+  return NAV.filter((n) => n.visible(user));
 }
-
-export const ROLE_META: Record<Role, { label: string; color: string }> = {
-  admin: { label: "Admin", color: "bg-slate-800 text-white" },
-  sales: { label: "Sales", color: "bg-blue-100 text-blue-700" },
-  purchase: { label: "Purchase", color: "bg-amber-100 text-amber-700" },
-  manufacturing: { label: "Manufacturing", color: "bg-indigo-100 text-indigo-700" },
-  inventory: { label: "Inventory", color: "bg-emerald-100 text-emerald-700" },
-  owner: { label: "Business Owner", color: "bg-rose-100 text-rose-700" },
-};

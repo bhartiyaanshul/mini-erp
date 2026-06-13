@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./api";
 import type {
+  AdminUser,
   AssistantReply,
   AuditLog,
   BoM,
@@ -10,6 +11,7 @@ import type {
   ForecastResponse,
   ForecastRow,
   ManufacturingOrder,
+  OrderJourney,
   Partner,
   PendingAction,
   Product,
@@ -29,20 +31,38 @@ export const useProducts = () =>
 export const useProduct = (id?: number) =>
   useQuery({ queryKey: ["product", id], queryFn: () => get<Product>(`/products/${id}`), enabled: !!id });
 
-export const usePartners = (type?: "customer" | "vendor") =>
+export const usePartners = (type?: "customer" | "vendor", enabled = true) =>
   useQuery({
     queryKey: ["partners", type],
     queryFn: () => get<Partner[]>(`/partners${type ? `?type=${type}` : ""}`),
+    enabled,
   });
 
-export const useSales = () =>
-  useQuery({ queryKey: ["sales"], queryFn: () => get<SaleOrder[]>("/sales") });
+export const useSales = (enabled = true) =>
+  useQuery({ queryKey: ["sales"], queryFn: () => get<SaleOrder[]>("/sales"), enabled });
 
-export const usePurchase = () =>
-  useQuery({ queryKey: ["purchase"], queryFn: () => get<PurchaseOrder[]>("/purchase") });
+// Rich internal order-tracking timeline for one sale order.
+export const useOrderJourney = (id?: number) =>
+  useQuery({
+    queryKey: ["journey", id],
+    queryFn: () => get<OrderJourney>(`/sales/${id}/journey`),
+    enabled: !!id,
+  });
 
-export const useMOs = () =>
-  useQuery({ queryKey: ["mos"], queryFn: () => get<ManufacturingOrder[]>("/manufacturing/orders") });
+// Public, sanitized tracking view fetched by signed token (no auth required).
+export const usePublicJourney = (token?: string) =>
+  useQuery({
+    queryKey: ["public-journey", token],
+    queryFn: () => get<OrderJourney>(`/public/track/${token}`),
+    enabled: !!token,
+    retry: false,
+  });
+
+export const usePurchase = (enabled = true) =>
+  useQuery({ queryKey: ["purchase"], queryFn: () => get<PurchaseOrder[]>("/purchase"), enabled });
+
+export const useMOs = (enabled = true) =>
+  useQuery({ queryKey: ["mos"], queryFn: () => get<ManufacturingOrder[]>("/manufacturing/orders"), enabled });
 
 export const useBoms = () => useQuery({ queryKey: ["boms"], queryFn: () => get<BoM[]>("/boms") });
 
@@ -147,6 +167,26 @@ export const useCreateBom = () =>
 
 export const useLoadDemo = () =>
   useInvalidatingMutation(() => api.post("/seed/demo").then((r) => r.data));
+
+/* ----------------------------- User management ----------------------------- */
+export const useUsers = (enabled = true) =>
+  useQuery({ queryKey: ["users"], queryFn: () => get<AdminUser[]>("/users"), enabled });
+
+export const useCreateUser = () =>
+  useInvalidatingMutation((body: any) => api.post<AdminUser>("/users", body).then((r) => r.data));
+
+export const useUpdateUser = () =>
+  useInvalidatingMutation(({ id, body }: { id: number; body: any }) =>
+    api.put<AdminUser>(`/users/${id}`, body).then((r) => r.data)
+  );
+
+export const useUpdateUserAccess = () =>
+  useInvalidatingMutation(({ id, access }: { id: number; access: Record<string, string> }) =>
+    api.put<AdminUser>(`/users/${id}/access`, { access }).then((r) => r.data)
+  );
+
+export const useDeleteUser = () =>
+  useInvalidatingMutation((id: number) => api.delete(`/users/${id}`).then((r) => r.data));
 
 export const useActOnForecast = () =>
   useInvalidatingMutation((body: { product_id: number; qty: number }) =>

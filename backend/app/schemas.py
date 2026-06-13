@@ -1,32 +1,147 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
-from app.models.enums import PartnerType, ProcurementType, UserRole
+from app.core.validation import validate_username, validate_photo, validate_strong_password
+from app.models.enums import AccessLevel, ModuleName, PartnerType, ProcurementType
 
 
 # --- Auth -----------------------------------------------------------------
-class SignupIn(BaseModel):
+class SignupRequestIn(BaseModel):
+    """Step 1 of signup: full details, validated before an OTP is emailed."""
+
+    company_name: str
+    username: str
     email: EmailStr
-    password: str = Field(min_length=4)
     full_name: str = ""
-    role: UserRole = UserRole.SALES
+    password: str
+    photo: str | None = None
+
+    @field_validator("company_name")
+    @classmethod
+    def _company(cls, v: str) -> str:
+        v = (v or "").strip()
+        if not v:
+            raise ValueError("Company name is required.")
+        return v
+
+    @field_validator("username")
+    @classmethod
+    def _login(cls, v: str) -> str:
+        return validate_username(v)
+
+    @field_validator("password")
+    @classmethod
+    def _pw(cls, v: str) -> str:
+        return validate_strong_password(v)
+
+    @field_validator("photo")
+    @classmethod
+    def _photo(cls, v: str | None) -> str:
+        return validate_photo(v)
+
+
+class OtpVerifyIn(BaseModel):
+    email: EmailStr
+    code: str
+
+
+class ResendOtpIn(BaseModel):
+    email: EmailStr
 
 
 class LoginIn(BaseModel):
-    email: EmailStr
+    identifier: str  # username or email
     password: str
+
+
+class UserOut(BaseModel):
+    id: int
+    username: str
+    email: str
+    full_name: str
+    company_id: int
+    company_name: str = ""
+    is_system_admin: bool = False
+    photo: str = ""
+    access: dict[str, str] = {}  # module value -> level value
 
 
 class TokenOut(BaseModel):
     access_token: str
     token_type: str = "bearer"
-    user: "UserOut"
+    user: UserOut
 
 
-class UserOut(BaseModel):
+class SignupRequestOut(BaseModel):
+    pending: bool = True
+    email: EmailStr
+    dev_otp: str | None = None  # only present when SMTP is not configured
+
+
+# --- Users (System Administrator management) ------------------------------
+class UserCreateIn(BaseModel):
+    username: str
+    email: EmailStr
+    full_name: str = ""
+    password: str
+    is_system_admin: bool = False
+    address: str = ""
+    position: str = ""
+    mobile_number: str = ""
+    photo: str | None = None
+    access: dict[ModuleName, AccessLevel] = {}
+
+    @field_validator("username")
+    @classmethod
+    def _login(cls, v: str) -> str:
+        return validate_username(v)
+
+    @field_validator("password")
+    @classmethod
+    def _pw(cls, v: str) -> str:
+        return validate_strong_password(v)
+
+    @field_validator("photo")
+    @classmethod
+    def _photo(cls, v: str | None) -> str:
+        return validate_photo(v)
+
+
+class UserUpdateIn(BaseModel):
+    full_name: str | None = None
+    address: str | None = None
+    mobile_number: str | None = None
+    position: str | None = None  # admin only
+    is_system_admin: bool | None = None  # admin only
+    is_active: bool | None = None  # admin only
+    photo: str | None = None
+
+    @field_validator("photo")
+    @classmethod
+    def _photo(cls, v: str | None) -> str | None:
+        return None if v is None else validate_photo(v)
+
+
+class AccessUpdateIn(BaseModel):
+    access: dict[ModuleName, AccessLevel]
+
+
+class UserAdminOut(BaseModel):
     id: int
+    username: str
     email: str
     full_name: str
-    role: UserRole
+    is_system_admin: bool
+    address: str = ""
+    position: str = ""
+    mobile_number: str = ""
+    photo: str = ""
+    is_active: bool = True
+    access: dict[str, str] = {}
+
+
+class CompanyOut(BaseModel):
+    id: int
+    name: str
 
 
 # --- Partners -------------------------------------------------------------

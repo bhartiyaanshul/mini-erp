@@ -6,7 +6,9 @@ from app.services import audit_service, manufacturing_service, purchase_service
 from app.services.common import fmt_qty
 
 
-def procure(session: Session, *, product_id: int, qty: float, origin: str = "", user=None) -> dict:
+def procure(
+    session: Session, *, company_id: int, product_id: int, qty: float, origin: str = "", user=None
+) -> dict:
     """The automation centerpiece.
 
     Given a shortage, create the right replenishment based on the product's
@@ -22,11 +24,19 @@ def procure(session: Session, *, product_id: int, qty: float, origin: str = "", 
 
     if product and product.procurement_type == ProcurementType.MANUFACTURE:
         mo = manufacturing_service.create_mo(
-            session, product_id=product_id, qty=qty, origin=origin, user=user, auto_confirm=True, commit=False
+            session,
+            company_id=company_id,
+            product_id=product_id,
+            qty=qty,
+            origin=origin,
+            user=user,
+            auto_confirm=True,
+            commit=False,
         )
         msg = f"Shortage of {fmt_qty(qty)} {pname} → auto-created Manufacturing Order {mo.name}"
         audit_service.log(
             session,
+            company_id=company_id,
             entity_type="procurement",
             entity_id=mo.id,
             action="auto_manufacture",
@@ -48,6 +58,7 @@ def procure(session: Session, *, product_id: int, qty: float, origin: str = "", 
         msg = f"Shortage of {fmt_qty(qty)} {pname} — no default vendor configured"
         audit_service.log(
             session,
+            company_id=company_id,
             entity_type="procurement",
             entity_id=product_id,
             action="blocked_buy",
@@ -63,6 +74,7 @@ def procure(session: Session, *, product_id: int, qty: float, origin: str = "", 
         }
     po = purchase_service.create_po(
         session,
+        company_id=company_id,
         vendor_id=vendor_id,
         line_items=[{"product_id": product_id, "qty": qty}],
         origin=origin,
@@ -73,6 +85,7 @@ def procure(session: Session, *, product_id: int, qty: float, origin: str = "", 
     msg = f"Shortage of {fmt_qty(qty)} {pname} → auto-created Purchase Order {po.name}"
     audit_service.log(
         session,
+        company_id=company_id,
         entity_type="procurement",
         entity_id=po.id,
         action="auto_buy",

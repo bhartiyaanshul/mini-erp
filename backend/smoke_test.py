@@ -33,7 +33,8 @@ def check(label, cond, extra=""):
 
 
 def auth_headers(client, email):
-    r = client.post("/api/auth/login", json={"email": email, "password": PW})
+    # Login accepts a username OR an email as the identifier.
+    r = client.post("/api/auth/login", json={"identifier": email, "password": PW})
     assert r.status_code == 200, r.text
     return {"Authorization": f"Bearer {r.json()['access_token']}"}
 

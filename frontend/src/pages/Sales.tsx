@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Plus, ShoppingCart, Trash2, Zap, CheckCircle2, Truck, Factory } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Plus, ShoppingCart, Trash2, Zap, CheckCircle2, Truck, Factory, Calendar, Store, CircleDot, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   useSales,
@@ -9,30 +9,63 @@ import {
   useConfirmSale,
   useDeliverSale,
   useCancelSale,
+  useOrderJourney,
 } from "@/lib/queries";
-import { apiError } from "@/lib/api";
+import { api, apiError } from "@/lib/api";
+import { OrderJourney } from "@/components/OrderJourney";
 import { money, qty as fmtQty, fmtDateTime } from "@/lib/utils";
 import type { ProcurementResult, SaleOrder } from "@/lib/types";
 import {
+  Avatar,
   Button,
   Card,
   EmptyState,
-  Input,
   Label,
   Modal,
   PageHeader,
   PageLoader,
+  QtyInput,
   Select,
+  Spinner,
   StateBadge,
 } from "@/components/ui";
+import {
+  DATE_PRESETS,
+  GRID_COLS,
+  ListToolbar,
+  NoResults,
+  matchesDatePreset,
+  toOptions,
+  useListControls,
+} from "@/components/list-view";
+
+const SALE_STATES = ["draft", "confirmed", "partially_delivered", "fully_delivered", "cancelled"];
 
 export default function Sales() {
   const { data: orders, isLoading } = useSales();
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState<SaleOrder | null>(null);
+  const controls = useListControls("sales");
 
   // Keep the selected order in sync with refreshed list data.
   const live = orders?.find((o) => o.id === selected?.id) ?? null;
+
+  const customerOptions = useMemo(() => {
+    const seen = new Map<number, string>();
+    (orders ?? []).forEach((o) => seen.set(o.partner_id, o.partner_name));
+    return [...seen].map(([id, name]) => ({ value: String(id), label: name }));
+  }, [orders]);
+
+  const filtered = useMemo(() => {
+    const q = controls.query.trim().toLowerCase();
+    return (orders ?? []).filter((o) => {
+      if (q && !`${o.name} ${o.partner_name}`.toLowerCase().includes(q)) return false;
+      if (controls.filters.status && o.state !== controls.filters.status) return false;
+      if (controls.filters.customer && String(o.partner_id) !== controls.filters.customer) return false;
+      if (!matchesDatePreset(o.order_date, controls.filters.date)) return false;
+      return true;
+    });
+  }, [orders, controls.query, controls.filters]);
 
   return (
     <div>
@@ -51,43 +84,93 @@ export default function Sales() {
       ) : !orders?.length ? (
         <EmptyState icon={<ShoppingCart className="h-10 w-10" />} title="No sale orders yet" hint="Create one to get started." />
       ) : (
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-400">
-                  <th className="px-5 py-3">Order</th>
-                  <th className="px-5 py-3">Customer</th>
-                  <th className="px-5 py-3">Date</th>
-                  <th className="px-5 py-3 text-right">Total</th>
-                  <th className="px-5 py-3">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.map((o) => (
-                  <tr
-                    key={o.id}
-                    onClick={() => setSelected(o)}
-                    className="cursor-pointer border-b border-teal-100 hover:bg-teal-50/70"
-                  >
-                    <td className="px-5 py-3 font-medium text-slate-800">{o.name}</td>
-                    <td className="px-5 py-3">{o.partner_name}</td>
-                    <td className="px-5 py-3 text-slate-500">{fmtDateTime(o.order_date)}</td>
-                    <td className="px-5 py-3 text-right tabular-nums">{money(o.total)}</td>
-                    <td className="px-5 py-3">
-                      <StateBadge state={o.state} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+        <>
+          <ListToolbar
+            controls={controls}
+            count={filtered.length}
+            searchPlaceholder="Search by order # or customer…"
+            filters={[
+              { key: "date", label: "Date", icon: Calendar, options: DATE_PRESETS },
+              { key: "customer", label: "Customers", icon: Store, options: customerOptions },
+              { key: "status", label: "Statuses", icon: CircleDot, options: toOptions(SALE_STATES) },
+            ]}
+          />
+
+          {!filtered.length ? (
+            <NoResults onReset={controls.reset} />
+          ) : controls.view === "grid" ? (
+            <div className={`grid gap-3 ${GRID_COLS[controls.gridSize]}`}>
+              {filtered.map((o) => (
+                <SaleCard key={o.id} order={o} onClick={() => setSelected(o)} />
+              ))}
+            </div>
+          ) : (
+            <Card>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-400">
+                      <th className="px-5 py-3">Order</th>
+                      <th className="px-5 py-3">Customer</th>
+                      <th className="px-5 py-3">Date</th>
+                      <th className="px-5 py-3 text-right">Total</th>
+                      <th className="px-5 py-3">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((o) => (
+                      <tr
+                        key={o.id}
+                        onClick={() => setSelected(o)}
+                        className="cursor-pointer border-b border-teal-100 hover:bg-teal-50/70"
+                      >
+                        <td className="px-5 py-3 font-medium text-slate-800">{o.name}</td>
+                        <td className="px-5 py-3">
+                          <span className="flex items-center gap-2">
+                            <Avatar name={o.partner_name} size="xs" /> {o.partner_name}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3 text-slate-500">{fmtDateTime(o.order_date)}</td>
+                        <td className="px-5 py-3 text-right tabular-nums">{money(o.total)}</td>
+                        <td className="px-5 py-3">
+                          <StateBadge state={o.state} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+        </>
       )}
 
       {creating && <SaleForm onClose={() => setCreating(false)} onCreated={(o) => setSelected(o)} />}
       {live && <SaleDetail order={live} onClose={() => setSelected(null)} />}
     </div>
+  );
+}
+
+function SaleCard({ order, onClick }: { order: SaleOrder; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex flex-col rounded-lg border border-teal-100 bg-white/85 p-4 text-left shadow-sm shadow-teal-950/[0.04] backdrop-blur transition hover:border-teal-300 hover:shadow-md"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate font-semibold text-slate-800">{order.name}</p>
+          <p className="mt-1 flex items-center gap-1.5 truncate text-xs text-slate-500">
+            <Avatar name={order.partner_name} size="xs" /> {order.partner_name}
+          </p>
+        </div>
+        <StateBadge state={order.state} />
+      </div>
+      <div className="mt-3 flex items-end justify-between border-t border-teal-50 pt-3">
+        <span className="text-xs text-slate-400">{fmtDateTime(order.order_date)}</span>
+        <span className="text-lg font-semibold tabular-nums text-slate-900">{money(order.total)}</span>
+      </div>
+    </button>
   );
 }
 
@@ -180,19 +263,16 @@ function SaleForm({ onClose, onCreated }: { onClose: () => void; onCreated: (o: 
 
                   <div>
                     <span className="mb-1 block text-xs font-semibold text-slate-500 md:hidden">Qty</span>
-                    <Input
-                      type="number"
-                      min={1}
-                      step={1}
+                    <QtyInput
                       className="md:!w-28 md:text-right"
                       value={l.qty}
-                      onChange={(e) => setLine(i, { qty: Math.max(1, +e.target.value || 1) })}
+                      onChange={(qty) => setLine(i, { qty })}
                     />
                   </div>
 
-                  <div className="text-left md:pt-2 md:text-right">
+                  <div className="min-w-0 text-left md:pt-2 md:text-right">
                     <span className="mb-1 block text-xs font-semibold text-slate-500 md:hidden">Subtotal</span>
-                    <span className="text-sm font-semibold tabular-nums text-slate-700">
+                    <span className="block break-words text-sm font-semibold tabular-nums text-slate-700">
                       {prod ? money(prod.sales_price * l.qty) : "—"}
                     </span>
                   </div>
@@ -240,7 +320,23 @@ function SaleDetail({ order, onClose }: { order: SaleOrder; onClose: () => void 
   const confirm = useConfirmSale();
   const deliver = useDeliverSale();
   const cancel = useCancelSale();
+  const { data: journey, isLoading: journeyLoading } = useOrderJourney(order.id);
   const [procurements, setProcurements] = useState<ProcurementResult[] | null>(null);
+  const [sharing, setSharing] = useState(false);
+
+  async function shareLink() {
+    setSharing(true);
+    try {
+      const { data } = await api.get<{ token: string; path: string }>(`/sales/${order.id}/track-link`);
+      const url = `${window.location.origin}${data.path}`;
+      await navigator.clipboard.writeText(url);
+      toast.success("Tracking link copied — share it with your customer", { icon: <Link2 className="h-4 w-4" /> });
+    } catch (e) {
+      toast.error(apiError(e));
+    } finally {
+      setSharing(false);
+    }
+  }
 
   function doConfirm() {
     confirm.mutate(order.id, {
@@ -260,9 +356,14 @@ function SaleDetail({ order, onClose }: { order: SaleOrder; onClose: () => void 
 
   return (
     <Modal open onClose={onClose} title={`${order.name} · ${order.partner_name}`} wide>
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between gap-3">
         <StateBadge state={order.state} />
-        <span className="text-sm text-slate-500">Total {money(order.total)}</span>
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={shareLink} loading={sharing}>
+            <Link2 className="h-4 w-4" /> Share tracking link
+          </Button>
+          <span className="text-sm text-slate-500">Total {money(order.total)}</span>
+        </div>
       </div>
 
       <table className="w-full text-sm">
@@ -307,6 +408,19 @@ function SaleDetail({ order, onClose }: { order: SaleOrder; onClose: () => void 
           ))}
         </div>
       )}
+
+      <div className="mt-5 border-t border-slate-100 pt-4">
+        <p className="mb-3 text-sm font-semibold text-slate-700">Order journey</p>
+        {journeyLoading ? (
+          <div className="flex justify-center py-6">
+            <Spinner />
+          </div>
+        ) : journey ? (
+          <OrderJourney journey={journey} />
+        ) : (
+          <p className="text-sm text-slate-400">Journey unavailable.</p>
+        )}
+      </div>
 
       <div className="mt-5 flex justify-end gap-2">
         {canCancel && (

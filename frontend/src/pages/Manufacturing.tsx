@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Plus, Factory, CheckCircle2, PlayCircle, Boxes } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Plus, Factory, CheckCircle2, PlayCircle, Boxes, Package, CircleDot, GitBranch } from "lucide-react";
 import { toast } from "sonner";
 import {
   useMOs,
@@ -18,20 +18,42 @@ import {
   Button,
   Card,
   EmptyState,
-  Input,
   Label,
   Modal,
   PageHeader,
   PageLoader,
+  QtyInput,
   Select,
   StateBadge,
 } from "@/components/ui";
+import { GRID_COLS, ListToolbar, NoResults, toOptions, useListControls } from "@/components/list-view";
+
+const MO_STATES = ["draft", "confirmed", "in_progress", "done", "cancelled"];
 
 export default function Manufacturing() {
   const { data: orders, isLoading } = useMOs();
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState<ManufacturingOrder | null>(null);
   const live = orders?.find((o) => o.id === selected?.id) ?? null;
+  const controls = useListControls("manufacturing");
+
+  const productOptions = useMemo(() => {
+    const seen = new Map<number, string>();
+    (orders ?? []).forEach((o) => seen.set(o.product_id, o.product_name));
+    return [...seen].map(([id, name]) => ({ value: String(id), label: name }));
+  }, [orders]);
+
+  const filtered = useMemo(() => {
+    const q = controls.query.trim().toLowerCase();
+    return (orders ?? []).filter((o) => {
+      if (q && !`${o.name} ${o.product_name}`.toLowerCase().includes(q)) return false;
+      if (controls.filters.status && o.state !== controls.filters.status) return false;
+      if (controls.filters.product && String(o.product_id) !== controls.filters.product) return false;
+      if (controls.filters.origin === "auto" && !o.origin) return false;
+      if (controls.filters.origin === "manual" && o.origin) return false;
+      return true;
+    });
+  }, [orders, controls.query, controls.filters]);
 
   return (
     <div>
@@ -54,41 +76,95 @@ export default function Manufacturing() {
           hint="Auto-created when a sale order needs manufactured stock, or create one manually."
         />
       ) : (
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-400">
-                  <th className="px-5 py-3">MO</th>
-                  <th className="px-5 py-3">Product</th>
-                  <th className="px-5 py-3 text-right">Qty</th>
-                  <th className="px-5 py-3">Origin</th>
-                  <th className="px-5 py-3">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.map((o) => (
-                  <tr key={o.id} onClick={() => setSelected(o)} className="cursor-pointer border-b border-teal-100 hover:bg-teal-50/70">
-                    <td className="px-5 py-3 font-medium text-slate-800">{o.name}</td>
-                    <td className="px-5 py-3">{o.product_name}</td>
-                    <td className="px-5 py-3 text-right tabular-nums">{fmtQty(o.qty)}</td>
-                    <td className="px-5 py-3 text-slate-500">
-                      {o.origin ? <Badge className="bg-blue-50 text-blue-600">{o.origin}</Badge> : "Manual"}
-                    </td>
-                    <td className="px-5 py-3">
-                      <StateBadge state={o.state} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+        <>
+          <ListToolbar
+            controls={controls}
+            count={filtered.length}
+            searchPlaceholder="Search by MO # or product…"
+            filters={[
+              { key: "product", label: "Products", icon: Package, options: productOptions },
+              {
+                key: "origin",
+                label: "Origins",
+                icon: GitBranch,
+                options: [
+                  { value: "auto", label: "Auto-procured" },
+                  { value: "manual", label: "Manual" },
+                ],
+              },
+              { key: "status", label: "Statuses", icon: CircleDot, options: toOptions(MO_STATES) },
+            ]}
+          />
+
+          {!filtered.length ? (
+            <NoResults onReset={controls.reset} />
+          ) : controls.view === "grid" ? (
+            <div className={`grid gap-3 ${GRID_COLS[controls.gridSize]}`}>
+              {filtered.map((o) => (
+                <MOCard key={o.id} mo={o} onClick={() => setSelected(o)} />
+              ))}
+            </div>
+          ) : (
+            <Card>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-400">
+                      <th className="px-5 py-3">MO</th>
+                      <th className="px-5 py-3">Product</th>
+                      <th className="px-5 py-3 text-right">Qty</th>
+                      <th className="px-5 py-3">Origin</th>
+                      <th className="px-5 py-3">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((o) => (
+                      <tr key={o.id} onClick={() => setSelected(o)} className="cursor-pointer border-b border-teal-100 hover:bg-teal-50/70">
+                        <td className="px-5 py-3 font-medium text-slate-800">{o.name}</td>
+                        <td className="px-5 py-3">{o.product_name}</td>
+                        <td className="px-5 py-3 text-right tabular-nums">{fmtQty(o.qty)}</td>
+                        <td className="px-5 py-3 text-slate-500">
+                          {o.origin ? <Badge className="bg-blue-50 text-blue-600">{o.origin}</Badge> : "Manual"}
+                        </td>
+                        <td className="px-5 py-3">
+                          <StateBadge state={o.state} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+        </>
       )}
 
       {creating && <MOForm onClose={() => setCreating(false)} />}
       {live && <MODetail mo={live} onClose={() => setSelected(null)} />}
     </div>
+  );
+}
+
+function MOCard({ mo, onClick }: { mo: ManufacturingOrder; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex flex-col rounded-lg border border-teal-100 bg-white/85 p-4 text-left shadow-sm shadow-teal-950/[0.04] backdrop-blur transition hover:border-teal-300 hover:shadow-md"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate font-semibold text-slate-800">{mo.name}</p>
+          <p className="mt-1 flex items-center gap-1.5 truncate text-xs text-slate-500">
+            <Factory className="h-3.5 w-3.5 text-indigo-500" /> {mo.product_name}
+          </p>
+        </div>
+        <StateBadge state={mo.state} />
+      </div>
+      <div className="mt-3 flex items-end justify-between border-t border-teal-50 pt-3">
+        {mo.origin ? <Badge className="bg-blue-50 text-blue-600">{mo.origin}</Badge> : <span className="text-xs text-slate-400">Manual</span>}
+        <span className="text-sm font-semibold tabular-nums text-slate-900">{fmtQty(mo.qty)} units</span>
+      </div>
+    </button>
   );
 }
 
@@ -132,7 +208,7 @@ function MOForm({ onClose }: { onClose: () => void }) {
         </div>
         <div>
           <Label>Quantity</Label>
-          <Input type="number" min={1} value={qty} onChange={(e) => setQty(+e.target.value)} />
+          <QtyInput value={qty} onChange={(qty) => setQty(qty)} />
         </div>
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>

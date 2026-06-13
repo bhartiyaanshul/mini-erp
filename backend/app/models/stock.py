@@ -15,6 +15,7 @@ class StockMove(SQLModel, table=True):
     """
 
     id: int | None = Field(default=None, primary_key=True)
+    company_id: int = Field(foreign_key="company.id", index=True)
     product_id: int = Field(foreign_key="product.id", index=True)
     qty: float
     move_type: MoveType

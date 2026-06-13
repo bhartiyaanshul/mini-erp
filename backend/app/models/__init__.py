@@ -1,9 +1,14 @@
 """Importing this package registers every table on SQLModel.metadata."""
 
+from app.models.access import UserModuleAccess
 from app.models.audit import AuditLog
 from app.models.bom import BoM, BoMLine, BoMOperation
+from app.models.company import Company
 from app.models.enums import (
+    ACCESS_RANK,
+    AccessLevel,
     MOState,
+    ModuleName,
     MoveSource,
     MoveState,
     MoveType,
@@ -11,7 +16,6 @@ from app.models.enums import (
     ProcurementType,
     PurchaseOrderState,
     SaleOrderState,
-    UserRole,
     WorkOrderState,
 )
 from app.models.manufacturing import ManufacturingOrder, WorkOrder
@@ -19,6 +23,7 @@ from app.models.partner import Partner
 from app.models.product import Product
 from app.models.purchase import PurchaseOrder, PurchaseOrderLine
 from app.models.sales import SaleOrder, SaleOrderLine
+from app.models.signup_request import SignupRequest
 from app.models.stock import StockMove
 from app.models.user import User
 
@@ -27,6 +32,7 @@ __all__ = [
     "BoM",
     "BoMLine",
     "BoMOperation",
+    "Company",
     "ManufacturingOrder",
     "WorkOrder",
     "Partner",
@@ -35,8 +41,13 @@ __all__ = [
     "PurchaseOrderLine",
     "SaleOrder",
     "SaleOrderLine",
+    "SignupRequest",
     "StockMove",
     "User",
+    "UserModuleAccess",
+    "ACCESS_RANK",
+    "AccessLevel",
+    "ModuleName",
     "MOState",
     "MoveSource",
     "MoveState",
@@ -45,6 +56,5 @@ __all__ = [
     "ProcurementType",
     "PurchaseOrderState",
     "SaleOrderState",
-    "UserRole",
     "WorkOrderState",
 ]

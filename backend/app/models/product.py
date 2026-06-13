@@ -13,6 +13,7 @@ class Product(SQLModel, table=True):
     """
 
     id: int | None = Field(default=None, primary_key=True)
+    company_id: int = Field(foreign_key="company.id", index=True)
     name: str = Field(index=True)
     sku: str = Field(default="", index=True)
     sales_price: float = 0.0

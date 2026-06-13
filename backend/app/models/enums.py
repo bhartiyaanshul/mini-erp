@@ -1,13 +1,29 @@
 from enum import Enum
 
 
-class UserRole(str, Enum):
-    ADMIN = "admin"
+class ModuleName(str, Enum):
+    """The four access-controlled modules from the brief's permission grid."""
+
     SALES = "sales"
     PURCHASE = "purchase"
     MANUFACTURING = "manufacturing"
-    INVENTORY = "inventory"
-    OWNER = "owner"
+    PRODUCT = "product"
+
+
+class AccessLevel(str, Enum):
+    """Per-module access level. Ordered NONE < USER < ADMIN (see RANK)."""
+
+    NONE = "none"
+    USER = "user"
+    ADMIN = "admin"
+
+
+# Ordinal ranking so callers can compare levels (e.g. user_level >= required).
+ACCESS_RANK: dict["AccessLevel", int] = {
+    AccessLevel.NONE: 0,
+    AccessLevel.USER: 1,
+    AccessLevel.ADMIN: 2,
+}
 
 
 class PartnerType(str, Enum):

@@ -3,21 +3,25 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { LogOut, Boxes, Radio, Sparkles, Search, Bell, Building2, ChevronLeft } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthContext";
-import { navForRole, ROLE_META } from "@/lib/nav";
+import { navForUser } from "@/lib/nav";
 import { useLive } from "@/lib/live";
 import { useLoadDemo } from "@/lib/queries";
 import { apiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { Button } from "./ui";
+import { Avatar, Button } from "./ui";
 import { Copilot } from "./Copilot";
+import { GlobalSearch } from "./GlobalSearch";
 
 export function Layout() {
   const { user, logout } = useAuth();
   const { connected, events } = useLive();
-  const nav = navForRole(user!.role);
+  const nav = navForUser(user!);
   const loadDemo = useLoadDemo();
-  const meta = ROLE_META[user!.role];
+  const kind = user!.is_system_admin
+    ? { label: "System Admin", color: "bg-teal-200 text-teal-900" }
+    : { label: "System User", color: "bg-slate-200 text-slate-700" };
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [seenCount, setSeenCount] = useState(0);
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -42,6 +46,17 @@ export function Layout() {
     }
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
+  }, []);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setSearchOpen((o) => !o);
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
   }, []);
 
   function toggleNotifications() {
@@ -81,7 +96,9 @@ export function Layout() {
                 collapsed ? "ml-0 max-w-0 opacity-0" : "ml-3 max-w-[180px] opacity-100"
               )}
             >
-              <p className="whitespace-nowrap text-sm font-semibold leading-tight text-white">Shiv Furniture</p>
+              <p className="max-w-[170px] truncate whitespace-nowrap text-sm font-semibold leading-tight text-white">
+                {user!.company_name || "Mini ERP"}
+              </p>
               <p className="whitespace-nowrap text-[11px] font-medium uppercase tracking-[0.16em] text-teal-200/70">
                 Enterprise ERP
               </p>
@@ -172,21 +189,27 @@ export function Layout() {
               collapsed ? "justify-center px-2" : "justify-between px-3"
             )}
           >
-            <div
-              className={cn(
-                "min-w-0 overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
-                collapsed ? "max-w-0 opacity-0" : "max-w-[160px] opacity-100"
-              )}
-            >
-              <p className="truncate text-sm font-medium text-white">{user!.full_name}</p>
-              <p className={cn("mt-1 inline-block rounded px-1.5 text-[10px] font-semibold", meta.color)}>
-                {meta.label}
-              </p>
-            </div>
+            <NavLink to="/profile" title="Your profile" className="flex min-w-0 items-center gap-2.5">
+              <Avatar name={user!.full_name} photo={user!.photo} size="sm" className="ring-1 ring-white/20" />
+              <div
+                className={cn(
+                  "min-w-0 overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
+                  collapsed ? "max-w-0 opacity-0" : "max-w-[150px] opacity-100"
+                )}
+              >
+                <p className="truncate text-sm font-medium text-white hover:underline">{user!.full_name}</p>
+                <p className={cn("mt-1 inline-block rounded px-1.5 text-[10px] font-semibold", kind.color)}>
+                  {kind.label}
+                </p>
+              </div>
+            </NavLink>
             <button
               onClick={logout}
               title="Log out"
-              className="shrink-0 rounded-md p-1.5 text-teal-200/70 transition-colors hover:bg-white/10 hover:text-white"
+              className={cn(
+                "shrink-0 rounded-md p-1.5 text-teal-200/70 transition-colors hover:bg-white/10 hover:text-white",
+                collapsed && "hidden"
+              )}
             >
               <LogOut className="h-4 w-4" />
             </button>
@@ -201,15 +224,28 @@ export function Layout() {
               <Boxes className="h-4 w-4" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-slate-950">Shiv Furniture</p>
+              <p className="max-w-[150px] truncate text-sm font-semibold text-slate-950">{user!.company_name || "Mini ERP"}</p>
               <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Enterprise ERP</p>
             </div>
           </div>
-          <div className="hidden h-9 w-full max-w-md items-center gap-2 rounded-md border border-teal-100 bg-white/70 px-3 text-sm text-slate-500 lg:flex">
+          <button
+            onClick={() => setSearchOpen(true)}
+            className="hidden h-9 w-full max-w-md items-center gap-2 rounded-md border border-teal-100 bg-white/70 px-3 text-sm text-slate-500 transition hover:border-teal-300 hover:bg-white lg:flex"
+          >
             <Search className="h-4 w-4" />
             <span>Search orders, products, partners</span>
-          </div>
+            <kbd className="ml-auto rounded border border-teal-100 bg-teal-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">
+              ⌘K
+            </kbd>
+          </button>
           <div className="flex items-center gap-2">
+            <button
+              title="Search"
+              onClick={() => setSearchOpen(true)}
+              className="flex h-9 w-9 items-center justify-center rounded-md border border-teal-100 bg-white/70 text-slate-500 hover:bg-teal-100/60 hover:text-teal-800 lg:hidden"
+            >
+              <Search className="h-4 w-4" />
+            </button>
             <div ref={notificationsRef} className="relative">
               <button
                 title="Notifications"
@@ -262,12 +298,19 @@ export function Layout() {
                 </div>
               )}
             </div>
-            {user!.role === "admin" && (
+            {user!.is_system_admin && (
               <Button variant="outline" size="sm" onClick={handleDemo} loading={loadDemo.isPending}>
                 <Sparkles className="h-4 w-4 text-teal-700" />
                 Load Demo Scenario
               </Button>
             )}
+            <NavLink
+              to="/profile"
+              title="Your profile"
+              className="rounded-full transition hover:ring-2 hover:ring-teal-300 hover:ring-offset-2 hover:ring-offset-teal-50"
+            >
+              <Avatar name={user!.full_name} photo={user!.photo} size="sm" />
+            </NavLink>
           </div>
         </header>
         <nav className="flex gap-2 overflow-x-auto border-b border-teal-100 bg-teal-50/90 px-4 py-2 md:hidden">
@@ -296,6 +339,7 @@ export function Layout() {
       </div>
 
       <Copilot />
+      <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>
   );
 }

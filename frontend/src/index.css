@@ -143,13 +143,64 @@ body {
     perspective: 900px;
   }
 
+  /* ---------- Landing redesign ---------- */
+
+  /* Bars that grow up into place once, on mount */
+  .animate-grow-bar {
+    transform-origin: bottom;
+    animation: grow-bar 0.95s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+  @keyframes grow-bar {
+    from {
+      transform: scaleY(0);
+      opacity: 0;
+    }
+    to {
+      transform: scaleY(1);
+      opacity: 1;
+    }
+  }
+
+  /* Slow, continuous gradient travel for accent surfaces */
+  .animate-pan {
+    background-size: 220% 220%;
+    animation: pan 16s ease-in-out infinite alternate;
+  }
+  @keyframes pan {
+    from {
+      background-position: 0% 50%;
+    }
+    to {
+      background-position: 100% 50%;
+    }
+  }
+
+  /* Faint dot grid that fades out toward the edges — a calm backdrop */
+  .bg-dotgrid {
+    background-image: radial-gradient(circle, rgba(13, 148, 136, 0.11) 1px, transparent 1.6px);
+    background-size: 26px 26px;
+    -webkit-mask-image: radial-gradient(ellipse 75% 65% at 50% 0%, #000 55%, transparent 100%);
+    mask-image: radial-gradient(ellipse 75% 65% at 50% 0%, #000 55%, transparent 100%);
+  }
+
+  /* Brand gradient applied to text — used sparingly on headlines */
+  .text-grad {
+    background-image: linear-gradient(115deg, #0f766e 0%, #0d9488 38%, #059669 68%, #0891b2 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .animate-rise,
     .animate-float,
     .animate-float-slow,
     .animate-drift,
     .animate-drift-rev,
-    .animate-sheen {
+    .animate-sheen,
+    .animate-grow-bar,
+    .animate-pan {
       animation: none;
       opacity: 1;
     }

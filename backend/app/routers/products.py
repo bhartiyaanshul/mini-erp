@@ -2,40 +2,50 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from app.core.db import get_session
-from app.core.deps import get_current_user, require_role
+from app.core.deps import get_current_user, require_access
 from app.events.bus import emit
 from app.models import Product, User
-from app.models.enums import UserRole
+from app.models.enums import ModuleName
 from app.schemas import ProductIn, ProductUpdate
 from app.serializers import product_out, products_list_out
 from app.services import audit_service
 
 router = APIRouter(prefix="/api/products", tags=["products"])
 
-manage = require_role(UserRole.OWNER, UserRole.INVENTORY)
+create = require_access(ModuleName.PRODUCT, "create")
+edit = require_access(ModuleName.PRODUCT, "edit")
+
+
+def _get_product(session: Session, product_id: int, company_id: int) -> Product:
+    p = session.get(Product, product_id)
+    if not p or p.company_id != company_id:
+        raise HTTPException(404, "Product not found")
+    return p
 
 
 @router.get("")
-def list_products(session: Session = Depends(get_session), _: User = Depends(get_current_user)):
-    products = list(session.exec(select(Product).order_by(Product.name)).all())
+def list_products(session: Session = Depends(get_session), user: User = Depends(get_current_user)):
+    products = list(
+        session.exec(
+            select(Product).where(Product.company_id == user.company_id).order_by(Product.name)
+        ).all()
+    )
     return products_list_out(session, products)
 
 
 @router.get("/{product_id}")
-def get_product(product_id: int, session: Session = Depends(get_session), _: User = Depends(get_current_user)):
-    p = session.get(Product, product_id)
-    if not p:
-        raise HTTPException(404, "Product not found")
-    return product_out(session, p)
+def get_product(product_id: int, session: Session = Depends(get_session), user: User = Depends(get_current_user)):
+    return product_out(session, _get_product(session, product_id, user.company_id))
 
 
 @router.post("")
-def create_product(data: ProductIn, session: Session = Depends(get_session), user: User = Depends(manage)):
-    p = Product(**data.model_dump())
+def create_product(data: ProductIn, session: Session = Depends(get_session), user: User = Depends(create)):
+    p = Product(company_id=user.company_id, **data.model_dump())
     session.add(p)
     session.flush()
     audit_service.log(
         session,
+        company_id=user.company_id,
         entity_type="product",
         entity_id=p.id,
         action="created",
@@ -50,10 +60,8 @@ def create_product(data: ProductIn, session: Session = Depends(get_session), use
 
 
 @router.put("/{product_id}")
-def update_product(product_id: int, data: ProductUpdate, session: Session = Depends(get_session), user: User = Depends(manage)):
-    p = session.get(Product, product_id)
-    if not p:
-        raise HTTPException(404, "Product not found")
+def update_product(product_id: int, data: ProductUpdate, session: Session = Depends(get_session), user: User = Depends(edit)):
+    p = _get_product(session, product_id, user.company_id)
     changes = data.model_dump(exclude_unset=True)
     price_changed = {}
     for k, v in changes.items():
@@ -65,6 +73,7 @@ def update_product(product_id: int, data: ProductUpdate, session: Session = Depe
     if price_changed:
         audit_service.log(
             session,
+            company_id=user.company_id,
             entity_type="product",
             entity_id=p.id,
             action="price_updated",
@@ -75,6 +84,7 @@ def update_product(product_id: int, data: ProductUpdate, session: Session = Depe
     else:
         audit_service.log(
             session,
+            company_id=user.company_id,
             entity_type="product",
             entity_id=p.id,
             action="updated",

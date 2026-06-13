@@ -1,10 +1,12 @@
 from sqlmodel import Session, select
 
+from app.core.deps import load_access
 from app.models import (
     AuditLog,
     BoM,
     BoMLine,
     BoMOperation,
+    Company,
     ManufacturingOrder,
     Partner,
     Product,
@@ -22,6 +24,41 @@ def _name(session: Session, model, _id):
         return None
     obj = session.get(model, _id)
     return getattr(obj, "name", None) if obj else None
+
+
+def user_out(session: Session, u: User) -> dict:
+    """Auth/profile view of a user, including company name and access map."""
+    company = session.get(Company, u.company_id)
+    access = load_access(session, u.id)
+    return {
+        "id": u.id,
+        "username": u.username,
+        "email": u.email,
+        "full_name": u.full_name,
+        "company_id": u.company_id,
+        "company_name": company.name if company else "",
+        "is_system_admin": u.is_system_admin,
+        "photo": u.photo,
+        "access": {m.value: lvl.value for m, lvl in access.items()},
+    }
+
+
+def user_admin_out(session: Session, u: User) -> dict:
+    """Fuller view for the System Administrator's user-management screen."""
+    access = load_access(session, u.id)
+    return {
+        "id": u.id,
+        "username": u.username,
+        "email": u.email,
+        "full_name": u.full_name,
+        "is_system_admin": u.is_system_admin,
+        "address": u.address,
+        "position": u.position,
+        "mobile_number": u.mobile_number,
+        "photo": u.photo,
+        "is_active": u.is_active,
+        "access": {m.value: lvl.value for m, lvl in access.items()},
+    }
 
 
 def product_out(session: Session, p: Product, avail: dict | None = None) -> dict:

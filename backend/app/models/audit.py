@@ -9,6 +9,7 @@ class AuditLog(SQLModel, table=True):
     """Append-only record of every significant change in the system."""
 
     id: int | None = Field(default=None, primary_key=True)
+    company_id: int = Field(default=0, foreign_key="company.id", index=True)
     entity_type: str = Field(index=True)
     entity_id: int | None = Field(default=None, index=True)
     action: str

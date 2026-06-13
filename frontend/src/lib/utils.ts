@@ -22,3 +22,23 @@ export const fmtTime = (s?: string | null) =>
 export function titleCase(s: string) {
   return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
+
+/** Largest quantity a single order / BoM line may carry — guards against runaway subtotals. */
+export const MAX_QTY = 1_000_000;
+
+/** Coerce free-typed input into a whole quantity within [min, max]. Empty/invalid → min. */
+export function clampQty(value: number | string, max = MAX_QTY, min = 1): number {
+  const n = Math.floor(Number(value));
+  if (!Number.isFinite(n) || n < min) return min;
+  return Math.min(n, max);
+}
+
+/** Largest unit price/amount allowed — keeps order totals sane. */
+export const MAX_PRICE = 100_000_000; // ₹10 crore per unit
+
+/** Coerce free-typed input into a non-negative amount within [0, max]. Empty/invalid → 0. */
+export function clampMoney(value: number | string, max = MAX_PRICE): number {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.min(n, max);
+}

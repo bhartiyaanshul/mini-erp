@@ -7,6 +7,7 @@ class BoM(SQLModel, table=True):
     """Bill of Materials: the recipe for a finished product."""
 
     id: int | None = Field(default=None, primary_key=True)
+    company_id: int = Field(foreign_key="company.id", index=True)
     name: str
     product_id: int = Field(foreign_key="product.id", index=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)

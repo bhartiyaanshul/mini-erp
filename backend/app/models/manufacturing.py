@@ -7,6 +7,7 @@ from app.models.enums import MOState, WorkOrderState
 
 class ManufacturingOrder(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
+    company_id: int = Field(foreign_key="company.id", index=True)
     name: str = Field(default="", index=True)  # human ref e.g. MO-0001
     product_id: int = Field(foreign_key="product.id")
     bom_id: int | None = Field(default=None, foreign_key="bom.id")

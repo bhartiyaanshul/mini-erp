@@ -12,6 +12,7 @@ from app.services.common import fmt_qty, next_seq_name
 def create_mo(
     session: Session,
     *,
+    company_id: int,
     product_id: int,
     qty: float,
     origin: str = "",
@@ -23,7 +24,8 @@ def create_mo(
     planned_start = datetime.utcnow()
     planned_finish = planned_start + timedelta(days=max(1, round(qty / 8)))
     mo = ManufacturingOrder(
-        name=next_seq_name(session, ManufacturingOrder, "MO"),
+        company_id=company_id,
+        name=next_seq_name(session, ManufacturingOrder, "MO", company_id),
         product_id=product_id,
         bom_id=product.bom_id if product else None,
         qty=qty,
@@ -40,6 +42,7 @@ def create_mo(
         desc += f" (origin {origin})"
     audit_service.log(
         session,
+        company_id=company_id,
         entity_type="manufacturing_order",
         entity_id=mo.id,
         action="created",
@@ -71,6 +74,7 @@ def confirm_mo(session: Session, mo: ManufacturingOrder, *, user=None, commit: b
             if reserve_qty > 0:
                 inventory_service.create_move(
                     session,
+                    company_id=mo.company_id,
                     product_id=bl.component_product_id,
                     qty=reserve_qty,
                     move_type=MoveType.OUT,
@@ -94,6 +98,7 @@ def confirm_mo(session: Session, mo: ManufacturingOrder, *, user=None, commit: b
 
                     res = procurement_service.procure(
                         session,
+                        company_id=mo.company_id,
                         product_id=bl.component_product_id,
                         qty=shortage,
                         origin=f"{mo.origin or mo.name} / {mo.name} component",
@@ -122,6 +127,7 @@ def confirm_mo(session: Session, mo: ManufacturingOrder, *, user=None, commit: b
     session.flush()
     audit_service.log(
         session,
+        company_id=mo.company_id,
         entity_type="manufacturing_order",
         entity_id=mo.id,
         action="confirmed",
@@ -181,6 +187,7 @@ def _top_up_component_reservations(session: Session, mo: ManufacturingOrder) -> 
             continue
         inventory_service.create_move(
             session,
+            company_id=mo.company_id,
             product_id=product_id,
             qty=qty,
             move_type=MoveType.OUT,
@@ -230,6 +237,7 @@ def complete_mo(session: Session, mo: ManufacturingOrder, *, user=None, commit: 
     # Produce finished goods: done IN.
     inventory_service.create_move(
         session,
+        company_id=mo.company_id,
         product_id=mo.product_id,
         qty=mo.qty,
         move_type=MoveType.IN,
@@ -248,6 +256,7 @@ def complete_mo(session: Session, mo: ManufacturingOrder, *, user=None, commit: 
     session.flush()
     audit_service.log(
         session,
+        company_id=mo.company_id,
         entity_type="manufacturing_order",
         entity_id=mo.id,
         action="completed",

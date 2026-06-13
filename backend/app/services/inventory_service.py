@@ -53,6 +53,7 @@ def availability_map(session: Session, product_ids: list[int]) -> dict[int, dict
 def create_move(
     session: Session,
     *,
+    company_id: int,
     product_id: int,
     qty: float,
     move_type: MoveType,
@@ -69,6 +70,7 @@ def create_move(
     ledger reflects when a move actually happened.
     """
     move = StockMove(
+        company_id=company_id,
         product_id=product_id,
         qty=qty,
         move_type=move_type,

@@ -10,10 +10,10 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 
 @router.get("")
-def metrics(session: Session = Depends(get_session), _: User = Depends(get_current_user)):
-    return dashboard_service.get_metrics(session)
+def metrics(session: Session = Depends(get_session), user: User = Depends(get_current_user)):
+    return dashboard_service.get_metrics(session, user.company_id)
 
 
 @router.get("/low-stock")
-def low_stock(threshold: float = 10.0, session: Session = Depends(get_session), _: User = Depends(get_current_user)):
-    return dashboard_service.low_stock(session, threshold)
+def low_stock(threshold: float = 10.0, session: Session = Depends(get_session), user: User = Depends(get_current_user)):
+    return dashboard_service.low_stock(session, user.company_id, threshold)

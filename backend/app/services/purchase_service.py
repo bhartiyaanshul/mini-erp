@@ -12,6 +12,7 @@ from app.services.common import next_seq_name
 def create_po(
     session: Session,
     *,
+    company_id: int,
     vendor_id: int | None,
     line_items: list[dict],
     origin: str = "",
@@ -20,7 +21,8 @@ def create_po(
     commit: bool = True,
 ) -> PurchaseOrder:
     po = PurchaseOrder(
-        name=next_seq_name(session, PurchaseOrder, "PO"),
+        company_id=company_id,
+        name=next_seq_name(session, PurchaseOrder, "PO", company_id),
         partner_id=vendor_id or 0,
         origin=origin,
         expected_receipt_date=datetime.utcnow() + timedelta(days=7),
@@ -45,6 +47,7 @@ def create_po(
     session.flush()
     audit_service.log(
         session,
+        company_id=company_id,
         entity_type="purchase_order",
         entity_id=po.id,
         action="created",
@@ -69,6 +72,7 @@ def confirm_po(session: Session, po: PurchaseOrder, *, user=None) -> PurchaseOrd
     session.add(po)
     audit_service.log(
         session,
+        company_id=po.company_id,
         entity_type="purchase_order",
         entity_id=po.id,
         action="confirmed",
@@ -103,6 +107,7 @@ def receive_order(
         if qty > 0:
             inventory_service.create_move(
                 session,
+                company_id=po.company_id,
                 product_id=line.product_id,
                 qty=qty,
                 move_type=MoveType.IN,
@@ -122,6 +127,7 @@ def receive_order(
     session.flush()
     audit_service.log(
         session,
+        company_id=po.company_id,
         entity_type="purchase_order",
         entity_id=po.id,
         action="received",

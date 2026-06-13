@@ -26,6 +26,7 @@ def confirm_order(session: Session, so: SaleOrder, *, user=None) -> dict:
         if to_reserve > 0:
             inventory_service.create_move(
                 session,
+                company_id=so.company_id,
                 product_id=line.product_id,
                 qty=to_reserve,
                 move_type=MoveType.OUT,
@@ -41,7 +42,12 @@ def confirm_order(session: Session, so: SaleOrder, *, user=None) -> dict:
             product = session.get(Product, line.product_id)
             if product and product.procure_on_demand:
                 res = procurement_service.procure(
-                    session, product_id=line.product_id, qty=shortage, origin=so.name, user=user
+                    session,
+                    company_id=so.company_id,
+                    product_id=line.product_id,
+                    qty=shortage,
+                    origin=so.name,
+                    user=user,
                 )
                 res["line_id"] = line.id
                 procurements.append(res)
@@ -61,6 +67,7 @@ def confirm_order(session: Session, so: SaleOrder, *, user=None) -> dict:
     session.add(so)
     audit_service.log(
         session,
+        company_id=so.company_id,
         entity_type="sale_order",
         entity_id=so.id,
         action="confirmed",
@@ -108,6 +115,7 @@ def deliver_order(session: Session, so: SaleOrder, *, user=None) -> dict:
             if top > 0:
                 inventory_service.create_move(
                     session,
+                    company_id=so.company_id,
                     product_id=line.product_id,
                     qty=top,
                     move_type=MoveType.OUT,
@@ -140,6 +148,7 @@ def deliver_order(session: Session, so: SaleOrder, *, user=None) -> dict:
                     session.add(mv)
                     inventory_service.create_move(
                         session,
+                        company_id=so.company_id,
                         product_id=line.product_id,
                         qty=remaining,
                         move_type=MoveType.OUT,
@@ -160,6 +169,7 @@ def deliver_order(session: Session, so: SaleOrder, *, user=None) -> dict:
     session.add(so)
     audit_service.log(
         session,
+        company_id=so.company_id,
         entity_type="sale_order",
         entity_id=so.id,
         action="delivered",
@@ -184,6 +194,7 @@ def cancel_order(session: Session, so: SaleOrder, *, user=None) -> SaleOrder:
     session.add(so)
     audit_service.log(
         session,
+        company_id=so.company_id,
         entity_type="sale_order",
         entity_id=so.id,
         action="cancelled",

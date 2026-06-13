@@ -1,6 +1,6 @@
-import { type ButtonHTMLAttributes, type CSSProperties, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { useEffect, useRef, useState, type ButtonHTMLAttributes, type CSSProperties, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import { Loader2, X } from "lucide-react";
-import { cn, titleCase } from "@/lib/utils";
+import { cn, clampQty, MAX_QTY, titleCase } from "@/lib/utils";
 
 /* ------------------------------- Button -------------------------------- */
 type Variant = "primary" | "secondary" | "outline" | "ghost" | "danger";
@@ -73,6 +73,61 @@ export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElem
     />
   );
 }
+/**
+ * Whole-number quantity field. A plain text input (not type="number", so no scroll-wheel /
+ * arrow-key / "e" quirks) that only accepts digits, lets the user clear it freely while typing,
+ * and on blur enforces the floor — the committed value is always an integer ≥ `min`.
+ */
+export function QtyInput({
+  value,
+  onChange,
+  min = 1,
+  max = MAX_QTY,
+  onBlur,
+  ...props
+}: Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "type" | "min" | "max"> & {
+  value: number;
+  onChange: (qty: number) => void;
+  min?: number;
+  max?: number;
+}) {
+  // Local text mirror so the field can be momentarily empty mid-edit without snapping to `min`.
+  const [text, setText] = useState(() => String(value));
+  const lastEmitted = useRef(value);
+
+  // Resync only when `value` changes from the outside (e.g. row reset), not from our own onChange.
+  useEffect(() => {
+    if (value !== lastEmitted.current) {
+      setText(String(value));
+      lastEmitted.current = value;
+    }
+  }, [value]);
+
+  const commit = (n: number) => {
+    lastEmitted.current = n;
+    onChange(n);
+  };
+
+  return (
+    <Input
+      type="text"
+      inputMode="numeric"
+      value={text}
+      onChange={(e) => {
+        const raw = e.target.value.replace(/\D/g, ""); // digits only
+        setText(raw);
+        if (raw !== "") commit(clampQty(raw, max, min));
+      }}
+      onBlur={(e) => {
+        const n = clampQty(text, max, min);
+        setText(String(n));
+        commit(n);
+        onBlur?.(e);
+      }}
+      {...props}
+    />
+  );
+}
 export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
     <textarea
@@ -122,6 +177,64 @@ const STATE_COLORS: Record<string, string> = {
 
 export function StateBadge({ state }: { state: string }) {
   return <Badge className={STATE_COLORS[state] ?? "bg-slate-100 text-slate-600"}>{titleCase(state)}</Badge>;
+}
+
+/* ------------------------------- Avatar -------------------------------- */
+const AVATAR_COLORS = [
+  "bg-teal-100 text-teal-800",
+  "bg-blue-100 text-blue-700",
+  "bg-amber-100 text-amber-800",
+  "bg-rose-100 text-rose-700",
+  "bg-indigo-100 text-indigo-700",
+  "bg-emerald-100 text-emerald-700",
+  "bg-fuchsia-100 text-fuchsia-700",
+  "bg-cyan-100 text-cyan-700",
+];
+
+const AVATAR_SIZES = {
+  xs: "h-6 w-6 text-[10px]",
+  sm: "h-8 w-8 text-xs",
+  md: "h-10 w-10 text-sm",
+  lg: "h-12 w-12 text-base",
+};
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function colorFor(name: string): string {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
+
+export function Avatar({
+  name,
+  photo,
+  size = "md",
+  className,
+}: {
+  name: string;
+  photo?: string | null;
+  size?: keyof typeof AVATAR_SIZES;
+  className?: string;
+}) {
+  return (
+    <span
+      title={name}
+      className={cn(
+        "inline-flex shrink-0 select-none items-center justify-center overflow-hidden rounded-full font-semibold leading-none",
+        photo ? "bg-slate-100" : colorFor(name),
+        AVATAR_SIZES[size],
+        className
+      )}
+    >
+      {photo ? <img src={photo} alt={name} className="h-full w-full object-cover" /> : initials(name)}
+    </span>
+  );
 }
 
 /* ------------------------------- Modal --------------------------------- */

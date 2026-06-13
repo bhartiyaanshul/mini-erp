@@ -15,8 +15,9 @@ import re
 from sqlmodel import Session, desc, select
 
 from app.core.config import settings
+from app.core.deps import has_access
 from app.models import ManufacturingOrder, Partner, Product, PurchaseOrder, SaleOrder, SaleOrderLine, User
-from app.models.enums import PartnerType, UserRole
+from app.models.enums import ModuleName, PartnerType
 from app.events.bus import emit
 from app.serializers import (
     mo_out,
@@ -58,21 +59,32 @@ class BadAction(AssistantError):
 # Role helpers + name resolution
 # --------------------------------------------------------------------------- #
 
-def _can(user: User, roles: set[UserRole] | None) -> bool:
-    """Admin bypasses everything; otherwise the role must be in the set."""
-    if roles is None:
-        return True
-    return user.role == UserRole.ADMIN or user.role in roles
+def _can_act(session: Session, user: User, atype: str | None) -> bool:
+    """Whether the user may take a mutating action (the only gate that matters;
+    reads are open). Mirrors the per-module access model used by the routers."""
+    if atype is None:
+        return True  # read tool
+    if atype == "sale_order":
+        return has_access(session, user, ModuleName.SALES, "create")
+    if atype == "purchase_order":
+        return has_access(session, user, ModuleName.PURCHASE, "create")
+    if atype == "manufacturing_order":
+        return has_access(session, user, ModuleName.MANUFACTURING, "create")
+    if atype == "forecast_action":
+        return has_access(session, user, ModuleName.PURCHASE, "approve") or has_access(
+            session, user, ModuleName.MANUFACTURING, "approve"
+        )
+    return False
 
 
-def _resolve_product(session: Session, ref) -> Product:
+def _resolve_product(session: Session, user: User, ref) -> Product:
     if isinstance(ref, int) or (isinstance(ref, str) and ref.isdigit()):
         p = session.get(Product, int(ref))
-        if p:
+        if p and p.company_id == user.company_id:
             return p
         raise BadAction(f"No product with id {ref}")
     q = str(ref).strip().lower()
-    products = list(session.exec(select(Product)).all())
+    products = list(session.exec(select(Product).where(Product.company_id == user.company_id)).all())
     exact = [p for p in products if p.name.lower() == q or p.sku.lower() == q]
     if exact:
         return exact[0]
@@ -84,14 +96,14 @@ def _resolve_product(session: Session, ref) -> Product:
     raise BadAction(f"No product matching '{ref}'.")
 
 
-def _resolve_partner(session: Session, ref, *, want: PartnerType | None = None) -> Partner:
+def _resolve_partner(session: Session, user: User, ref, *, want: PartnerType | None = None) -> Partner:
     if isinstance(ref, int) or (isinstance(ref, str) and ref.isdigit()):
         p = session.get(Partner, int(ref))
-        if p:
+        if p and p.company_id == user.company_id:
             return p
         raise BadAction(f"No partner with id {ref}")
     q = str(ref).strip().lower()
-    partners = list(session.exec(select(Partner)).all())
+    partners = list(session.exec(select(Partner).where(Partner.company_id == user.company_id)).all())
 
     def ok(p: Partner) -> bool:
         if want is None:
@@ -115,7 +127,7 @@ def _resolve_partner(session: Session, ref, *, want: PartnerType | None = None) 
 # --------------------------------------------------------------------------- #
 
 def _t_list_products(session, user, query=None):
-    products = list(session.exec(select(Product)).all())
+    products = list(session.exec(select(Product).where(Product.company_id == user.company_id)).all())
     if query:
         q = query.lower()
         products = [p for p in products if q in p.name.lower() or q in p.sku.lower()]
@@ -123,17 +135,17 @@ def _t_list_products(session, user, query=None):
 
 
 def _t_get_availability(session, user, product):
-    p = _resolve_product(session, product)
+    p = _resolve_product(session, user, product)
     avail = inventory_service.get_availability(session, p.id)
     return {"product": p.name, "sku": p.sku, "sales_price": p.sales_price, **avail}
 
 
 def _t_dashboard_metrics(session, user):
-    return dashboard_service.get_metrics(session)
+    return dashboard_service.get_metrics(session, user.company_id)
 
 
 def _t_low_stock(session, user, threshold=10.0):
-    return dashboard_service.low_stock(session, threshold)
+    return dashboard_service.low_stock(session, user.company_id, threshold)
 
 
 def _t_demand_forecast(session, user):
@@ -146,30 +158,39 @@ def _t_demand_forecast(session, user):
             "suggested_qty": r["suggested_qty"],
             "strategy": r["strategy"],
         }
-        for r in forecast_service.forecast_all(session)
+        for r in forecast_service.forecast_all(session, user.company_id)
     ]
 
 
 def _t_list_sales_orders(session, user, state=None):
-    rows = session.exec(select(SaleOrder).order_by(desc(SaleOrder.id)).limit(20)).all()
+    rows = session.exec(
+        select(SaleOrder).where(SaleOrder.company_id == user.company_id).order_by(desc(SaleOrder.id)).limit(20)
+    ).all()
     out = [sale_order_out(session, so) for so in rows]
     return [o for o in out if not state or o["state"] == state]
 
 
 def _t_list_purchase_orders(session, user, state=None):
-    rows = session.exec(select(PurchaseOrder).order_by(desc(PurchaseOrder.id)).limit(20)).all()
+    rows = session.exec(
+        select(PurchaseOrder).where(PurchaseOrder.company_id == user.company_id).order_by(desc(PurchaseOrder.id)).limit(20)
+    ).all()
     out = [purchase_order_out(session, po) for po in rows]
     return [o for o in out if not state or o["state"] == state]
 
 
 def _t_list_manufacturing_orders(session, user, state=None):
-    rows = session.exec(select(ManufacturingOrder).order_by(desc(ManufacturingOrder.id)).limit(20)).all()
+    rows = session.exec(
+        select(ManufacturingOrder)
+        .where(ManufacturingOrder.company_id == user.company_id)
+        .order_by(desc(ManufacturingOrder.id))
+        .limit(20)
+    ).all()
     out = [mo_out(session, mo) for mo in rows]
     return [o for o in out if not state or o["state"] == state]
 
 
 def _t_list_partners(session, user, type=None):
-    partners = list(session.exec(select(Partner)).all())
+    partners = list(session.exec(select(Partner).where(Partner.company_id == user.company_id)).all())
     if type:
         partners = [p for p in partners if p.type.value == type or p.type == PartnerType.BOTH]
     return [partner_out(p) for p in partners]
@@ -184,10 +205,10 @@ def _price(p: Product) -> float:
 
 
 def _propose_sale_order(session, user, customer, items, confirm=False):
-    partner = _resolve_partner(session, customer, want=PartnerType.CUSTOMER)
+    partner = _resolve_partner(session, user, customer, want=PartnerType.CUSTOMER)
     lines, total = [], 0.0
     for it in items:
-        p = _resolve_product(session, it["product"])
+        p = _resolve_product(session, user, it["product"])
         qty = float(it.get("qty", 1))
         unit_price = p.sales_price  # from the product master, never model-supplied
         total += qty * unit_price
@@ -212,10 +233,10 @@ def _propose_sale_order(session, user, customer, items, confirm=False):
 
 
 def _propose_purchase_order(session, user, vendor, items):
-    partner = _resolve_partner(session, vendor, want=PartnerType.VENDOR)
+    partner = _resolve_partner(session, user, vendor, want=PartnerType.VENDOR)
     lines, total = [], 0.0
     for it in items:
-        p = _resolve_product(session, it["product"])
+        p = _resolve_product(session, user, it["product"])
         qty = float(it.get("qty", 1))
         unit_price = p.cost_price  # from the product master, never model-supplied
         total += qty * unit_price
@@ -238,7 +259,7 @@ def _propose_purchase_order(session, user, vendor, items):
 
 
 def _propose_manufacturing_order(session, user, product, qty):
-    p = _resolve_product(session, product)
+    p = _resolve_product(session, user, product)
     if not p.bom_id:
         raise BadAction(f"{p.name} has no Bill of Materials, so it can't be manufactured.")
     qty = float(qty)
@@ -251,9 +272,9 @@ def _propose_manufacturing_order(session, user, product, qty):
 
 
 def _propose_forecast_action(session, user, product, qty=None):
-    p = _resolve_product(session, product)
+    p = _resolve_product(session, user, product)
     if qty is None:
-        rows = forecast_service.forecast_all(session)
+        rows = forecast_service.forecast_all(session, user.company_id)
         row = next((r for r in rows if r["product_id"] == p.id), None)
         qty = row["suggested_qty"] if row else 0
     qty = float(qty)
@@ -274,52 +295,52 @@ def _propose_forecast_action(session, user, product, qty=None):
 
 TOOLS = [
     {
-        "name": "list_products", "kind": "read", "roles": None, "handler": _t_list_products,
+        "name": "list_products", "kind": "read", "act": None, "handler": _t_list_products,
         "description": "List products with prices and live on-hand / reserved / free-to-use stock. Optional 'query' filters by name or SKU.",
         "parameters": {"type": "object", "properties": {"query": {"type": "string"}}},
     },
     {
-        "name": "get_availability", "kind": "read", "roles": None, "handler": _t_get_availability,
+        "name": "get_availability", "kind": "read", "act": None, "handler": _t_get_availability,
         "description": "Get on-hand, reserved and free-to-use stock for one product (by name, SKU or id).",
         "parameters": {"type": "object", "properties": {"product": {"type": "string"}}, "required": ["product"]},
     },
     {
-        "name": "dashboard_metrics", "kind": "read", "roles": None, "handler": _t_dashboard_metrics,
+        "name": "dashboard_metrics", "kind": "read", "act": None, "handler": _t_dashboard_metrics,
         "description": "Operational counters: sales/purchase/manufacturing order totals, pending deliveries, delayed orders, open MOs/POs.",
         "parameters": {"type": "object", "properties": {}},
     },
     {
-        "name": "low_stock", "kind": "read", "roles": None, "handler": _t_low_stock,
+        "name": "low_stock", "kind": "read", "act": None, "handler": _t_low_stock,
         "description": "Products whose free-to-use stock is at or below a threshold (default 10).",
         "parameters": {"type": "object", "properties": {"threshold": {"type": "number"}}},
     },
     {
-        "name": "demand_forecast", "kind": "read", "roles": None, "handler": _t_demand_forecast,
+        "name": "demand_forecast", "kind": "read", "act": None, "handler": _t_demand_forecast,
         "description": "Predictive procurement: per-product average daily usage, days of cover, projected stockout date, suggested reorder quantity, urgency and strategy (buy/manufacture).",
         "parameters": {"type": "object", "properties": {}},
     },
     {
-        "name": "list_sales_orders", "kind": "read", "roles": None, "handler": _t_list_sales_orders,
+        "name": "list_sales_orders", "kind": "read", "act": None, "handler": _t_list_sales_orders,
         "description": "Recent sale orders with lines, totals and state. Optional 'state' filter (draft, confirmed, partially_delivered, fully_delivered, cancelled).",
         "parameters": {"type": "object", "properties": {"state": {"type": "string"}}},
     },
     {
-        "name": "list_purchase_orders", "kind": "read", "roles": None, "handler": _t_list_purchase_orders,
+        "name": "list_purchase_orders", "kind": "read", "act": None, "handler": _t_list_purchase_orders,
         "description": "Recent purchase orders with lines, totals and state. Optional 'state' filter.",
         "parameters": {"type": "object", "properties": {"state": {"type": "string"}}},
     },
     {
-        "name": "list_manufacturing_orders", "kind": "read", "roles": None, "handler": _t_list_manufacturing_orders,
+        "name": "list_manufacturing_orders", "kind": "read", "act": None, "handler": _t_list_manufacturing_orders,
         "description": "Recent manufacturing orders with components and work orders. Optional 'state' filter.",
         "parameters": {"type": "object", "properties": {"state": {"type": "string"}}},
     },
     {
-        "name": "list_partners", "kind": "read", "roles": None, "handler": _t_list_partners,
+        "name": "list_partners", "kind": "read", "act": None, "handler": _t_list_partners,
         "description": "List customers/vendors. Optional 'type' filter ('customer' or 'vendor').",
         "parameters": {"type": "object", "properties": {"type": {"type": "string", "enum": ["customer", "vendor"]}}},
     },
     {
-        "name": "propose_sale_order", "kind": "propose", "roles": {UserRole.SALES}, "handler": _propose_sale_order,
+        "name": "propose_sale_order", "kind": "propose", "act": "sale_order", "handler": _propose_sale_order,
         "description": "Draft a sale order for the user to confirm. Set confirm=true to also confirm it (reserves stock and may trigger automatic procurement). Does NOT execute until the user confirms.",
         "parameters": {
             "type": "object",
@@ -334,7 +355,7 @@ TOOLS = [
         },
     },
     {
-        "name": "propose_purchase_order", "kind": "propose", "roles": {UserRole.PURCHASE}, "handler": _propose_purchase_order,
+        "name": "propose_purchase_order", "kind": "propose", "act": "purchase_order", "handler": _propose_purchase_order,
         "description": "Draft a purchase order to a vendor for the user to confirm. Does NOT execute until the user confirms.",
         "parameters": {
             "type": "object",
@@ -348,12 +369,12 @@ TOOLS = [
         },
     },
     {
-        "name": "propose_manufacturing_order", "kind": "propose", "roles": {UserRole.MANUFACTURING}, "handler": _propose_manufacturing_order,
+        "name": "propose_manufacturing_order", "kind": "propose", "act": "manufacturing_order", "handler": _propose_manufacturing_order,
         "description": "Draft a manufacturing order for a product with a BoM, for the user to confirm. Does NOT execute until the user confirms.",
         "parameters": {"type": "object", "properties": {"product": {"type": "string"}, "qty": {"type": "number"}}, "required": ["product", "qty"]},
     },
     {
-        "name": "propose_forecast_action", "kind": "propose", "roles": {UserRole.PURCHASE, UserRole.MANUFACTURING, UserRole.OWNER}, "handler": _propose_forecast_action,
+        "name": "propose_forecast_action", "kind": "propose", "act": "forecast_action", "handler": _propose_forecast_action,
         "description": "Draft the recommended replenishment for a product (uses the forecast's suggested quantity if qty is omitted), for the user to confirm.",
         "parameters": {"type": "object", "properties": {"product": {"type": "string"}, "qty": {"type": "number"}}, "required": ["product"]},
     },
@@ -362,19 +383,20 @@ TOOLS = [
 _TOOLS_BY_NAME = {t["name"]: t for t in TOOLS}
 
 
-def _tool_schemas_for(user: User) -> list[dict]:
+def _tool_schemas_for(session: Session, user: User) -> list[dict]:
     return [
         {"type": "function", "function": {"name": t["name"], "description": t["description"], "parameters": t["parameters"]}}
         for t in TOOLS
-        if _can(user, t["roles"])
+        if _can_act(session, user, t["act"])
     ]
 
 
 def _system_prompt(user: User) -> str:
+    kind = "System Administrator" if user.is_system_admin else "team member"
     return (
-        "You are the Copilot for Shiv Furniture Works, a Mini ERP (Sales, Purchase, "
+        "You are the Copilot for a Mini ERP (Sales, Purchase, "
         "Manufacturing, Inventory, all on an immutable stock ledger). "
-        f"The current user is {user.full_name}, role '{user.role.value}'. Currency is INR (₹).\n"
+        f"The current user is {user.full_name}, a {kind}. Currency is INR (₹).\n"
         "RULES:\n"
         "- Always use tools to get real data. NEVER invent numbers, names, IDs or statuses.\n"
         "- For anything that changes data (orders, procurement), call the matching propose_* "
@@ -470,7 +492,7 @@ def chat(session: Session, user: User, messages: list[dict]) -> dict:
         from groq import Groq
 
         client = Groq(api_key=settings.GROQ_API_KEY)
-        tool_schemas = _tool_schemas_for(user)
+        tool_schemas = _tool_schemas_for(session, user)
 
         convo = [{"role": "system", "content": _system_prompt(user)}]
         for m in messages:
@@ -520,8 +542,8 @@ def chat(session: Session, user: User, messages: list[dict]) -> dict:
                     args = json.loads(cargs or "{}")
                     if not spec:
                         result = {"error": f"unknown tool {name}"}
-                    elif not _can(user, spec["roles"]):
-                        result = {"error": f"role '{user.role.value}' may not use {name}"}
+                    elif not _can_act(session, user, spec["act"]):
+                        result = {"error": f"you do not have access to use {name}"}
                     else:
                         # Drop kwargs the handler doesn't accept (small models
                         # sometimes pass spurious args to no-arg tools).
@@ -559,39 +581,33 @@ def chat(session: Session, user: User, messages: list[dict]) -> dict:
 # Execute (the only mutation path; RBAC-gated per action type)
 # --------------------------------------------------------------------------- #
 
-_ACTION_ROLES = {
-    "sale_order": {UserRole.SALES},
-    "purchase_order": {UserRole.PURCHASE},
-    "manufacturing_order": {UserRole.MANUFACTURING},
-    "forecast_action": {UserRole.PURCHASE, UserRole.MANUFACTURING, UserRole.OWNER},
-}
+_VALID_ACTIONS = {"sale_order", "purchase_order", "manufacturing_order", "forecast_action"}
 
 
 def execute(session: Session, user: User, action: dict) -> dict:
     atype = action.get("type")
     args = action.get("args", {})
-    roles = _ACTION_ROLES.get(atype)
-    if roles is None:
+    if atype not in _VALID_ACTIONS:
         raise BadAction(f"Unknown action '{atype}'")
-    if not _can(user, roles):
-        raise PermissionDenied(f"Role '{user.role.value}' may not perform '{atype}'.")
+    if not _can_act(session, user, atype):
+        raise PermissionDenied(f"You do not have access to perform '{atype}'.")
 
     if atype == "sale_order":
         return _exec_sale_order(session, user, args)
     if atype == "purchase_order":
         po = purchase_service.create_po(
-            session, vendor_id=args.get("vendor_id"),
+            session, company_id=user.company_id, vendor_id=args.get("vendor_id"),
             line_items=[{"product_id": l["product_id"], "qty": l["qty"], "unit_price": l.get("unit_price")} for l in args["lines"]],
             origin="Assistant", user=user, auto_confirm=True, commit=True,
         )
         return {"message": f"Purchase Order {po.name} created and confirmed.", "doc_name": po.name}
     if atype == "manufacturing_order":
         mo = manufacturing_service.create_mo(
-            session, product_id=args["product_id"], qty=args["qty"], origin="Assistant", user=user, auto_confirm=True, commit=True,
+            session, company_id=user.company_id, product_id=args["product_id"], qty=args["qty"], origin="Assistant", user=user, auto_confirm=True, commit=True,
         )
         return {"message": f"Manufacturing Order {mo.name} created and confirmed.", "doc_name": mo.name}
     if atype == "forecast_action":
-        res = procurement_service.procure(session, product_id=args["product_id"], qty=args["qty"], origin="Assistant", user=user)
+        res = procurement_service.procure(session, company_id=user.company_id, product_id=args["product_id"], qty=args["qty"], origin="Assistant", user=user)
         session.commit()
         if res["kind"] in ("manufacture", "buy"):
             emit("procurement_triggered", {"kind": res["kind"], "doc_name": res["doc_name"], "doc_id": res["doc_id"],
@@ -603,7 +619,12 @@ def execute(session: Session, user: User, action: dict) -> dict:
 
 def _exec_sale_order(session: Session, user: User, args: dict) -> dict:
     """Create the SO (mirrors routers/sales.py:create_order); optionally confirm."""
-    so = SaleOrder(name=next_seq_name(session, SaleOrder, "SO"), partner_id=args["partner_id"], created_by_id=user.id)
+    so = SaleOrder(
+        company_id=user.company_id,
+        name=next_seq_name(session, SaleOrder, "SO", user.company_id),
+        partner_id=args["partner_id"],
+        created_by_id=user.id,
+    )
     session.add(so)
     session.flush()
     for ln in args["lines"]:
@@ -612,7 +633,7 @@ def _exec_sale_order(session: Session, user: User, args: dict) -> dict:
         if price is None:
             price = product.sales_price if product else 0.0
         session.add(SaleOrderLine(sale_order_id=so.id, product_id=ln["product_id"], qty=ln["qty"], unit_price=price))
-    audit_service.log(session, entity_type="sale_order", entity_id=so.id, action="created",
+    audit_service.log(session, company_id=user.company_id, entity_type="sale_order", entity_id=so.id, action="created",
                       description=f"{so.name} created (assistant)", user_id=user.id)
     session.commit()
     session.refresh(so)

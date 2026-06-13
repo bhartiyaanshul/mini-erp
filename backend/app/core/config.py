@@ -30,6 +30,24 @@ class Settings(BaseSettings):
     FORECAST_LEAD_TIME_DAYS: int = 7
     FORECAST_SAFETY_DAYS: int = 3
 
+    # Email OTP for signup. Leave SMTP_HOST blank to use the dev fallback:
+    # the OTP is logged to the server console and returned as `dev_otp`, so the
+    # signup flow works end-to-end without a mail server.
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = "Mini ERP <no-reply@mini-erp.local>"
+    SMTP_USE_TLS: bool = True
+    OTP_EXPIRE_MINUTES: int = 10
+    OTP_LENGTH: int = 6
+    OTP_MAX_ATTEMPTS: int = 5
+    OTP_RESEND_COOLDOWN_SECONDS: int = 30
+
+    @property
+    def smtp_configured(self) -> bool:
+        return bool(self.SMTP_HOST)
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]

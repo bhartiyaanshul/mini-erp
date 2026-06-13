@@ -6,7 +6,8 @@ import { useAuth } from "@/auth/AuthContext";
 import { apiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Button } from "./ui";
-import type { ChatMessage, PendingAction, Role } from "@/lib/types";
+import { canView } from "@/lib/access";
+import type { ChatMessage, PendingAction, User } from "@/lib/types";
 
 interface Turn {
   id: number;
@@ -32,14 +33,16 @@ const TOOL_LABELS: Record<string, string> = {
   propose_forecast_action: "drafted a replenishment",
 };
 
-const SUGGESTIONS: Record<Role, string[]> = {
-  sales: ["Check what I can sell today", "Draft a sale order for Retail Mart"],
-  purchase: ["Show urgent replenishment needs", "Draft a vendor purchase order"],
-  manufacturing: ["Show the most urgent build", "Draft a manufacturing order"],
-  inventory: ["Show low stock items", "Check procurement risk"],
-  owner: ["Give me a business health brief", "Show the biggest operational risk"],
-  admin: ["Check sellable stock", "Show urgent procurement needs"],
-};
+function suggestionsFor(user: User): string[] {
+  const s: string[] = [];
+  if (canView(user, "sales")) s.push("Check what I can sell today");
+  if (canView(user, "purchase")) s.push("Show urgent replenishment needs");
+  if (canView(user, "manufacturing")) s.push("Show the most urgent build");
+  if (canView(user, "product")) s.push("Show low stock items");
+  if (user.is_system_admin) s.push("Give me a business health brief");
+  if (s.length === 0) s.push("Give me a business health brief", "Show low stock items");
+  return s.slice(0, 4);
+}
 
 let _id = 0;
 const nextId = () => ++_id;
@@ -88,7 +91,7 @@ export function Copilot() {
   }
 
   if (!user) return null;
-  const suggestions = SUGGESTIONS[user.role] ?? SUGGESTIONS.admin;
+  const suggestions = suggestionsFor(user);
 
   return (
     <>
