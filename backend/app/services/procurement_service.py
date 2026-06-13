@@ -44,6 +44,23 @@ def procure(session: Session, *, product_id: int, qty: float, origin: str = "", 
         }
 
     vendor_id = product.default_vendor_id if product else None
+    if not vendor_id:
+        msg = f"Shortage of {fmt_qty(qty)} {pname} — no default vendor configured"
+        audit_service.log(
+            session,
+            entity_type="procurement",
+            entity_id=product_id,
+            action="blocked_buy",
+            description=msg,
+            user_id=user.id if user else None,
+            payload={"product_id": product_id, "qty": qty, "origin": origin},
+        )
+        return {
+            "kind": "none",
+            "qty": qty,
+            "product": pname,
+            "message": msg,
+        }
     po = purchase_service.create_po(
         session,
         vendor_id=vendor_id,

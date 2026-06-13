@@ -8,7 +8,7 @@ from app.models.enums import MoveSource, MoveState, MoveType
 class StockMove(SQLModel, table=True):
     """The immutable ledger. Every inventory change is one row here.
 
-    Balances are NEVER stored — they are summed from these rows:
+    Balances are NEVER stored; they are summed from these rows:
         on_hand     = Σ(done IN qty)   − Σ(done OUT qty)
         reserved    = Σ(reserved OUT qty)
         free_to_use = on_hand − reserved

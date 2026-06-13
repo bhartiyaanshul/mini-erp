@@ -1,3 +1,6 @@
+import math
+from datetime import datetime, timedelta
+
 from sqlmodel import Session, delete, select
 
 from app.models import (
@@ -69,18 +72,64 @@ def _clear_business_data(session: Session) -> None:
     session.commit()
 
 
-def _adjust(session: Session, product_id: int, qty: float) -> None:
-    if qty <= 0:
-        return
+HISTORY_DAYS = 35  # how far back the seeded demand history runs
+
+
+def _daily_demand(base: float, day_index: int) -> int:
+    """Deterministic per-day demand: a gentle weekly wave + slight upward drift.
+
+    No randomness, so the seed, and therefore the forecast computed from it,
+    is fully reproducible. The drift gives a mild rising trend, which makes
+    the projected stockouts believable for the demo.
+    """
+    wave = 1.0 + 0.30 * math.sin(day_index / 7.0 * 2.0 * math.pi)
+    drift = 1.0 + 0.010 * day_index
+    return max(0, round(base * wave * drift))
+
+
+def _seed_history(
+    session: Session,
+    product_id: int,
+    *,
+    base_per_day: float,
+    current_on_hand: float,
+    source: MoveSource,
+    note: str,
+) -> None:
+    """Backfill ~HISTORY_DAYS of dated demand, netting to `current_on_hand`.
+
+    Posts one dated opening receipt (sized = on-hand + everything later sold)
+    followed by a deterministic series of dated DONE OUT moves. The ledger ends
+    at exactly `current_on_hand`, so the demo script's invariants hold, but now
+    there's real consumption history for the forecast to learn from.
+    """
+    start = datetime.utcnow() - timedelta(days=HISTORY_DAYS)
+    daily = [_daily_demand(base_per_day, i) for i in range(HISTORY_DAYS)]
+    total_out = sum(daily)
+
     inventory_service.create_move(
         session,
         product_id=product_id,
-        qty=qty,
+        qty=float(current_on_hand + total_out),
         move_type=MoveType.IN,
         source=MoveSource.ADJUSTMENT,
         state=MoveState.DONE,
+        done_at=start,
         note="Opening stock (demo seed)",
     )
+    for i, q in enumerate(daily):
+        if q <= 0:
+            continue
+        inventory_service.create_move(
+            session,
+            product_id=product_id,
+            qty=float(q),
+            move_type=MoveType.OUT,
+            source=source,
+            state=MoveState.DONE,
+            done_at=start + timedelta(days=i + 1),
+            note=note,
+        )
 
 
 def run_demo_seed(session: Session) -> dict:
@@ -138,12 +187,22 @@ def run_demo_seed(session: Session) -> dict:
     session.add(table)
     session.flush()
 
-    # --- Opening stock ----------------------------------------------------
-    _adjust(session, legs.id, 80)     # enough to build 15+ tables (15*4=60)
-    _adjust(session, top.id, 30)      # 15*1 = 15
-    _adjust(session, screws.id, 300)  # 15*12 = 180
-    _adjust(session, table.id, 5)     # MTS buffer; large order triggers MTO
-    _adjust(session, chair.id, 10)    # large chair order triggers a PO
+    # --- Opening stock + dated demand history -----------------------------
+    # Each call backfills ~35 days of consumption but nets to the same on-hand
+    # the demo script relies on (5 tables, 10 chairs, components deep), so the
+    # forecast has real signal while every existing flow still works.
+    # Finished goods are sold; components are consumed building tables
+    # (~4 legs / 1 top / 12 screws per table).
+    _seed_history(session, table.id, base_per_day=1.6, current_on_hand=5,
+                  source=MoveSource.SALE, note="Sold (demo history)")
+    _seed_history(session, chair.id, base_per_day=2.2, current_on_hand=10,
+                  source=MoveSource.SALE, note="Sold (demo history)")
+    _seed_history(session, legs.id, base_per_day=8, current_on_hand=80,
+                  source=MoveSource.MANUFACTURING_CONSUME, note="Consumed in assembly (demo history)")
+    _seed_history(session, top.id, base_per_day=1.9, current_on_hand=30,
+                  source=MoveSource.MANUFACTURING_CONSUME, note="Consumed in assembly (demo history)")
+    _seed_history(session, screws.id, base_per_day=20, current_on_hand=300,
+                  source=MoveSource.MANUFACTURING_CONSUME, note="Consumed in assembly (demo history)")
 
     session.commit()
 

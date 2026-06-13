@@ -68,7 +68,7 @@ export default function Sales() {
                   <tr
                     key={o.id}
                     onClick={() => setSelected(o)}
-                    className="cursor-pointer border-b border-slate-50 hover:bg-slate-50/60"
+                    className="cursor-pointer border-b border-teal-100 hover:bg-teal-50/70"
                   >
                     <td className="px-5 py-3 font-medium text-slate-800">{o.name}</td>
                     <td className="px-5 py-3">{o.partner_name}</td>
@@ -118,6 +118,11 @@ function SaleForm({ onClose, onCreated }: { onClose: () => void; onCreated: (o: 
     );
   }
 
+  const orderTotal = lines.reduce((sum, line) => {
+    const product = products?.find((p) => p.id === line.product_id);
+    return sum + (product ? product.sales_price * line.qty : 0);
+  }, 0);
+
   return (
     <Modal open onClose={onClose} title="New Sale Order" wide>
       <div className="space-y-4">
@@ -135,39 +140,87 @@ function SaleForm({ onClose, onCreated }: { onClose: () => void; onCreated: (o: 
 
         <div>
           <Label>Lines</Label>
-          <div className="space-y-2">
+          <div className="rounded-lg border border-teal-100 bg-teal-50/40">
+            <div className="hidden grid-cols-[minmax(0,1fr)_112px_120px_40px] gap-3 border-b border-teal-100 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 md:grid">
+              <span>Product</span>
+              <span className="text-right">Qty</span>
+              <span className="text-right">Subtotal</span>
+              <span />
+            </div>
             {lines.map((l, i) => {
               const prod = products?.find((p) => p.id === l.product_id);
               return (
-                <div key={i} className="flex items-center gap-2">
-                  <Select className="flex-1" value={l.product_id} onChange={(e) => setLine(i, { product_id: e.target.value ? +e.target.value : "" })}>
-                    <option value="">— Product —</option>
-                    {products?.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} (free: {fmtQty(p.free_to_use)})
-                      </option>
-                    ))}
-                  </Select>
-                  <Input
-                    type="number"
-                    min={1}
-                    className="w-24"
-                    value={l.qty}
-                    onChange={(e) => setLine(i, { qty: +e.target.value })}
-                  />
-                  <span className="w-28 text-right text-sm text-slate-500">
-                    {prod ? money(prod.sales_price * l.qty) : ""}
-                  </span>
-                  <Button variant="ghost" size="icon" onClick={() => setLines((ls) => ls.filter((_, idx) => idx !== i))}>
-                    <Trash2 className="h-4 w-4 text-slate-400" />
-                  </Button>
+                <div
+                  key={i}
+                  className="grid gap-3 border-b border-teal-100 p-3 last:border-b-0 md:grid-cols-[minmax(0,1fr)_112px_120px_40px] md:items-start"
+                >
+                  <div className="min-w-0">
+                    <Select
+                      className="min-w-0"
+                      value={l.product_id}
+                      onChange={(e) => setLine(i, { product_id: e.target.value ? +e.target.value : "" })}
+                    >
+                      <option value="">Select product</option>
+                      {products?.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} · Free {fmtQty(p.free_to_use)} · {money(p.sales_price)}
+                        </option>
+                      ))}
+                    </Select>
+                    {prod ? (
+                      <div className="mt-1.5 flex flex-wrap gap-2 text-[11px] font-medium text-slate-500">
+                        <span className="rounded bg-white/80 px-2 py-0.5">Free: {fmtQty(prod.free_to_use)}</span>
+                        <span className="rounded bg-white/80 px-2 py-0.5">On hand: {fmtQty(prod.on_hand)}</span>
+                        <span className="rounded bg-white/80 px-2 py-0.5">Price: {money(prod.sales_price)}</span>
+                      </div>
+                    ) : (
+                      <p className="mt-1.5 text-xs text-slate-400">Choose a product to calculate availability and subtotal.</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <span className="mb-1 block text-xs font-semibold text-slate-500 md:hidden">Qty</span>
+                    <Input
+                      type="number"
+                      min={1}
+                      step={1}
+                      className="md:!w-28 md:text-right"
+                      value={l.qty}
+                      onChange={(e) => setLine(i, { qty: Math.max(1, +e.target.value || 1) })}
+                    />
+                  </div>
+
+                  <div className="text-left md:pt-2 md:text-right">
+                    <span className="mb-1 block text-xs font-semibold text-slate-500 md:hidden">Subtotal</span>
+                    <span className="text-sm font-semibold tabular-nums text-slate-700">
+                      {prod ? money(prod.sales_price * l.qty) : "—"}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-end md:pt-0.5">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="Remove line"
+                      disabled={lines.length === 1}
+                      onClick={() => setLines((ls) => ls.filter((_, idx) => idx !== i))}
+                    >
+                      <Trash2 className="h-4 w-4 text-slate-400" />
+                    </Button>
+                  </div>
                 </div>
               );
             })}
           </div>
-          <Button variant="ghost" size="sm" className="mt-2" onClick={() => setLines((ls) => [...ls, { product_id: "", qty: 1 }])}>
-            <Plus className="h-4 w-4" /> Add line
-          </Button>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            <Button variant="ghost" size="sm" onClick={() => setLines((ls) => [...ls, { product_id: "", qty: 1 }])}>
+              <Plus className="h-4 w-4" /> Add line
+            </Button>
+            <div className="rounded-md border border-teal-100 bg-white/80 px-3 py-2 text-sm">
+              <span className="mr-3 text-slate-500">Order total</span>
+              <span className="font-semibold tabular-nums text-slate-900">{money(orderTotal)}</span>
+            </div>
+          </div>
         </div>
 
         <div className="flex justify-end gap-2">
@@ -236,14 +289,14 @@ function SaleDetail({ order, onClose }: { order: SaleOrder; onClose: () => void 
       </table>
 
       {procurements && procurements.length > 0 && (
-        <div className="mt-4 space-y-2 rounded-xl border border-brand-200 bg-brand-50 p-4">
-          <p className="flex items-center gap-2 text-sm font-semibold text-brand-700">
+        <div className="mt-4 space-y-2 rounded-lg border border-teal-200 bg-teal-50 p-4">
+          <p className="flex items-center gap-2 text-sm font-semibold text-teal-700">
             <Zap className="h-4 w-4" /> Procurement automation
           </p>
           {procurements.map((p, i) => (
             <div key={i} className="flex items-center gap-2 text-sm text-slate-700">
               {p.kind === "manufacture" ? (
-                <Factory className="h-4 w-4 text-purple-600" />
+                <Factory className="h-4 w-4 text-indigo-600" />
               ) : p.kind === "buy" ? (
                 <Truck className="h-4 w-4 text-amber-600" />
               ) : (

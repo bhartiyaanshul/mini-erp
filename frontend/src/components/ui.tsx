@@ -1,4 +1,4 @@
-import { type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { type ButtonHTMLAttributes, type CSSProperties, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import { Loader2, X } from "lucide-react";
 import { cn, titleCase } from "@/lib/utils";
 
@@ -7,14 +7,14 @@ type Variant = "primary" | "secondary" | "outline" | "ghost" | "danger";
 type Size = "sm" | "md" | "icon";
 
 const VARIANTS: Record<Variant, string> = {
-  primary: "bg-brand-600 text-white hover:bg-brand-700 shadow-sm",
-  secondary: "bg-slate-900 text-white hover:bg-slate-800 shadow-sm",
-  outline: "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50",
-  ghost: "text-slate-600 hover:bg-slate-100",
-  danger: "bg-rose-600 text-white hover:bg-rose-700 shadow-sm",
+  primary: "bg-teal-700 text-white shadow-sm shadow-teal-900/10 hover:bg-teal-800",
+  secondary: "bg-slate-900 text-white shadow-sm shadow-slate-900/10 hover:bg-slate-800",
+  outline: "border border-teal-200 bg-teal-50/70 text-slate-700 shadow-sm hover:border-teal-300 hover:bg-teal-100/70",
+  ghost: "text-slate-600 hover:bg-teal-100/70 hover:text-teal-900",
+  danger: "bg-rose-700 text-white shadow-sm shadow-rose-900/10 hover:bg-rose-800",
 };
 const SIZES: Record<Size, string> = {
-  sm: "h-8 px-3 text-sm",
+  sm: "h-8 px-3 text-xs",
   md: "h-10 px-4 text-sm",
   icon: "h-9 w-9",
 };
@@ -30,7 +30,7 @@ export function Button({
   return (
     <button
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none",
+        "inline-flex items-center justify-center gap-2 rounded-md font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50",
         VARIANTS[variant],
         SIZES[size],
         className
@@ -45,14 +45,14 @@ export function Button({
 }
 
 /* -------------------------------- Card --------------------------------- */
-export function Card({ className, children }: { className?: string; children: ReactNode }) {
-  return <div className={cn("rounded-xl border border-slate-200 bg-white shadow-sm", className)}>{children}</div>;
+export function Card({ className, children, style }: { className?: string; children: ReactNode; style?: CSSProperties }) {
+  return <div style={style} className={cn("rounded-lg border border-teal-100 bg-white/85 shadow-sm shadow-teal-950/[0.04] backdrop-blur", className)}>{children}</div>;
 }
 export function CardHeader({ className, children }: { className?: string; children: ReactNode }) {
-  return <div className={cn("flex items-center justify-between border-b border-slate-100 px-5 py-4", className)}>{children}</div>;
+  return <div className={cn("flex items-center justify-between border-b border-teal-100 px-5 py-4", className)}>{children}</div>;
 }
 export function CardTitle({ children, className }: { children: ReactNode; className?: string }) {
-  return <h3 className={cn("font-semibold text-slate-800", className)}>{children}</h3>;
+  return <h3 className={cn("text-sm font-semibold text-slate-900", className)}>{children}</h3>;
 }
 export function CardContent({ className, children }: { className?: string; children: ReactNode }) {
   return <div className={cn("p-5", className)}>{children}</div>;
@@ -60,13 +60,13 @@ export function CardContent({ className, children }: { className?: string; child
 
 /* ------------------------------- Inputs -------------------------------- */
 export function Label({ children, className }: { children: ReactNode; className?: string }) {
-  return <label className={cn("mb-1 block text-sm font-medium text-slate-600", className)}>{children}</label>;
+  return <label className={cn("mb-1.5 block text-xs font-semibold text-slate-600", className)}>{children}</label>;
 }
 export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       className={cn(
-        "h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100",
+        "h-10 w-full rounded-md border border-teal-100 bg-white/90 px-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-100",
         className
       )}
       {...props}
@@ -77,7 +77,7 @@ export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTex
   return (
     <textarea
       className={cn(
-        "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100",
+        "w-full rounded-md border border-teal-100 bg-white/90 px-3 py-2 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-100",
         className
       )}
       {...props}
@@ -88,7 +88,7 @@ export function Select({ className, children, ...props }: SelectHTMLAttributes<H
   return (
     <select
       className={cn(
-        "h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100",
+        "h-10 w-full rounded-md border border-teal-100 bg-white/90 px-3 text-sm text-slate-800 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100",
         className
       )}
       {...props}
@@ -101,7 +101,7 @@ export function Select({ className, children, ...props }: SelectHTMLAttributes<H
 /* ------------------------------- Badge --------------------------------- */
 export function Badge({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <span className={cn("inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium", className)}>
+    <span className={cn("inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold", className)}>
       {children}
     </span>
   );
@@ -140,11 +140,11 @@ export function Modal({
 }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-4 backdrop-blur-sm">
-      <div className={cn("mt-12 w-full rounded-2xl bg-white shadow-xl animate-in", wide ? "max-w-3xl" : "max-w-lg")}>
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-          <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
-          <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/45 p-4 backdrop-blur-sm">
+      <div className={cn("mt-12 w-full animate-in rounded-lg border border-teal-100 bg-white/95 shadow-xl shadow-teal-950/15", wide ? "max-w-3xl" : "max-w-lg")}>
+        <div className="flex items-center justify-between border-b border-teal-100 px-5 py-4">
+          <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+          <button onClick={onClose} className="rounded-md p-1 text-slate-400 hover:bg-teal-50 hover:text-teal-700">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -156,7 +156,7 @@ export function Modal({
 
 /* ------------------------------ Helpers -------------------------------- */
 export function Spinner({ className }: { className?: string }) {
-  return <Loader2 className={cn("h-5 w-5 animate-spin text-brand-500", className)} />;
+  return <Loader2 className={cn("h-5 w-5 animate-spin text-teal-500", className)} />;
 }
 
 export function PageLoader() {
@@ -169,19 +169,19 @@ export function PageLoader() {
 
 export function EmptyState({ title, hint, icon }: { title: string; hint?: string; icon?: ReactNode }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 py-14 text-center">
+    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-teal-200 bg-white/80 py-14 text-center">
       {icon && <div className="mb-3 text-slate-300">{icon}</div>}
-      <p className="font-medium text-slate-600">{title}</p>
-      {hint && <p className="mt-1 max-w-sm text-sm text-slate-400">{hint}</p>}
+      <p className="font-semibold text-slate-700">{title}</p>
+      {hint && <p className="mt-1 max-w-sm text-sm text-slate-500">{hint}</p>}
     </div>
   );
 }
 
 export function PageHeader({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {
   return (
-    <div className="mb-6 flex items-end justify-between gap-4">
+    <div className="mb-5 flex items-end justify-between gap-4 border-b border-teal-200 pb-5">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">{title}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-950">{title}</h1>
         {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
       </div>
       {action}

@@ -64,6 +64,7 @@ export interface SaleOrder {
   partner_name: string;
   state: "draft" | "confirmed" | "partially_delivered" | "fully_delivered" | "cancelled";
   order_date: string;
+  promise_date: string | null;
   total: number;
   lines: OrderLine[];
 }
@@ -76,6 +77,7 @@ export interface PurchaseOrder {
   state: "draft" | "confirmed" | "partially_received" | "fully_received" | "cancelled";
   origin: string;
   order_date: string;
+  expected_receipt_date: string | null;
   total: number;
   lines: OrderLine[];
 }
@@ -101,6 +103,7 @@ export interface MOComponent {
   qty_per_unit: number;
   qty_required: number;
   free_to_use: number;
+  shortage: number;
 }
 
 export interface WorkOrder {
@@ -121,9 +124,36 @@ export interface ManufacturingOrder {
   qty: number;
   state: "draft" | "confirmed" | "in_progress" | "done" | "cancelled";
   origin: string;
+  planned_start: string | null;
+  planned_finish: string | null;
   created_at: string;
   components: MOComponent[];
   work_orders: WorkOrder[];
+}
+
+export interface AtRiskOrder {
+  id: number;
+  name: string;
+  customer: string;
+  missing_qty: number;
+  revenue: number;
+  reason: string;
+  next_action: string;
+  promise_date: string | null;
+}
+
+export interface OrchestrationNode {
+  label: string;
+  kind: "SO" | "MO" | "PO" | "OUT";
+  state: string;
+  detail: string | number;
+}
+
+export interface OrchestrationRow {
+  order: string;
+  customer: string;
+  value: number;
+  nodes: OrchestrationNode[];
 }
 
 export interface BoMLine {
@@ -160,6 +190,11 @@ export interface DashboardMetrics {
   total_purchase_orders: number;
   partial_receipts: number;
   po_open: number;
+  at_risk_orders: AtRiskOrder[];
+  revenue_at_risk: number;
+  inventory_value: number;
+  open_procurement_value: number;
+  orchestration: OrchestrationRow[];
   sales_by_state: { state: string; count: number }[];
   mo_by_state: { state: string; count: number }[];
   po_by_state: { state: string; count: number }[];
@@ -211,4 +246,64 @@ export interface WsEvent {
   message: string;
   data: Record<string, any>;
   ts: string;
+}
+
+export interface ForecastRow {
+  product_id: number;
+  name: string;
+  sku: string;
+  uom: string;
+  on_hand: number;
+  reserved: number;
+  free_to_use: number;
+  adu: number;
+  days_of_cover: number | null;
+  stockout_date: string | null;
+  reorder_point: number;
+  suggested_qty: number;
+  trend: "rising" | "falling" | "flat";
+  strategy: "buy" | "manufacture";
+  urgency: "critical" | "watch" | "ok";
+}
+
+export interface ForecastRecommendation {
+  product_id: number;
+  action: string;
+  reason: string;
+}
+
+export interface ForecastBriefing {
+  summary: string;
+  recommendations: ForecastRecommendation[];
+  source: "groq" | "template";
+}
+
+export interface ForecastResponse {
+  rows: ForecastRow[];
+  briefing: ForecastBriefing;
+}
+
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface ActionPreview {
+  title: string;
+  lines: string[];
+  total?: number;
+  confirm?: boolean;
+  note?: string;
+}
+
+export interface PendingAction {
+  type: string;
+  args: Record<string, any>;
+  preview: ActionPreview;
+}
+
+export interface AssistantReply {
+  reply: string;
+  pending_actions: PendingAction[];
+  tool_trace: string[];
 }

@@ -19,7 +19,7 @@ import {
 const TYPE_META: Record<string, { label: string; color: string; icon: any }> = {
   customer: { label: "Customer", color: "bg-blue-100 text-blue-700", icon: Store },
   vendor: { label: "Vendor", color: "bg-amber-100 text-amber-700", icon: Building2 },
-  both: { label: "Customer & Vendor", color: "bg-purple-100 text-purple-700", icon: Users },
+  both: { label: "Customer & Vendor", color: "bg-indigo-100 text-indigo-700", icon: Users },
 };
 
 export default function Partners() {
@@ -58,7 +58,7 @@ export default function Partners() {
                 {partners.map((p) => {
                   const meta = TYPE_META[p.type];
                   return (
-                    <tr key={p.id} className="border-b border-slate-50 hover:bg-slate-50/60">
+                    <tr key={p.id} className="border-b border-teal-100 hover:bg-teal-50/70">
                       <td className="px-5 py-3 font-medium text-slate-800">{p.name}</td>
                       <td className="px-5 py-3">
                         <Badge className={meta.color}>

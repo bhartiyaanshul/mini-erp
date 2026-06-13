@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Boxes, ArrowRight } from "lucide-react";
+import { Boxes, ArrowRight, ShieldCheck, Factory, BarChart3 } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
 import { apiError } from "@/lib/api";
 import { Button, Input, Label } from "@/components/ui";
@@ -40,35 +40,34 @@ export default function Login() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-900 via-slate-900 to-brand-900 p-4">
-      <div className="grid w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-2xl md:grid-cols-2">
-        {/* Left: pitch */}
-        <div className="hidden flex-col justify-between bg-gradient-to-br from-brand-600 to-brand-900 p-8 text-white md:flex">
+    <div className="flex min-h-screen items-center justify-center bg-slate-950 p-4">
+      <div className="grid w-full max-w-5xl overflow-hidden rounded-lg border border-teal-100 bg-white/90 shadow-2xl shadow-teal-950/20 backdrop-blur md:grid-cols-[1.15fr_0.85fr]">
+        <div className="hidden flex-col justify-between bg-slate-900 p-8 text-white md:flex">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15">
+            <div className="flex h-10 w-10 items-center justify-center rounded-md bg-teal-700">
               <Boxes className="h-6 w-6" />
             </div>
             <div>
-              <p className="font-bold">Shiv Furniture</p>
-              <p className="text-xs text-white/70">Mini ERP — Demand to Delivery</p>
+              <p className="font-semibold">Shiv Furniture</p>
+              <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">Enterprise ERP</p>
             </div>
           </div>
           <div>
-            <h2 className="text-2xl font-bold leading-snug">
-              One connected system, from sales to the shop floor.
+            <h2 className="max-w-md text-3xl font-semibold leading-tight">
+              Demand-to-delivery operations for furniture manufacturing.
             </h2>
-            <p className="mt-3 text-sm text-white/80">
-              Every quantity is derived from an immutable stock ledger — real-time, fully auditable,
-              with automated procurement built in.
-            </p>
+            <div className="mt-8 grid gap-3">
+              <LoginPoint icon={<BarChart3 className="h-4 w-4" />} title="Control tower" text="Sales, production, procurement, and delivery risk." />
+              <LoginPoint icon={<Factory className="h-4 w-4" />} title="Manufacturing ready" text="MTO and MTS flows with material visibility." />
+              <LoginPoint icon={<ShieldCheck className="h-4 w-4" />} title="Audit grade" text="Ledger-driven stock movement and role access." />
+            </div>
           </div>
-          <p className="text-xs text-white/60">Solo build · FastAPI · React · SQLite→Postgres-ready</p>
+          <p className="text-xs text-slate-400">Secure tenant access · Real-time operational ledger</p>
         </div>
 
-        {/* Right: form */}
         <div className="p-8">
-          <h1 className="text-xl font-bold text-slate-900">Sign in</h1>
-          <p className="mt-1 text-sm text-slate-500">Use a demo account below or enter credentials.</p>
+          <h1 className="text-xl font-semibold text-slate-950">Sign in</h1>
+          <p className="mt-1 text-sm text-slate-600">Use a demo account below or enter credentials.</p>
 
           <form onSubmit={submit} className="mt-6 space-y-4">
             <div>
@@ -84,14 +83,14 @@ export default function Login() {
                 autoComplete="current-password"
               />
             </div>
-            {error && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-600">{error}</p>}
+            {error && <p className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
             <Button type="submit" loading={loading} className="w-full">
               Sign in <ArrowRight className="h-4 w-4" />
             </Button>
           </form>
 
           <div className="mt-6">
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">Quick login as</p>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Quick login as</p>
             <div className="grid grid-cols-2 gap-2">
               {DEMO_ACCOUNTS.map((a) => (
                 <button
@@ -101,7 +100,7 @@ export default function Login() {
                     setPassword(DEMO_PW);
                     submit(undefined, { email: a.email, password: DEMO_PW });
                   }}
-                  className="rounded-lg border border-slate-200 px-3 py-2 text-left text-xs font-medium text-slate-600 transition hover:border-brand-400 hover:bg-brand-50"
+                  className="rounded-md border border-teal-100 bg-teal-50/40 px-3 py-2 text-left text-xs font-semibold text-slate-700 transition hover:border-teal-300 hover:bg-teal-100/70 hover:text-teal-800"
                 >
                   <span className={`mr-1 inline-block h-2 w-2 rounded-full align-middle ${ROLE_META[a.role].color}`} />
                   {ROLE_META[a.role].label}
@@ -110,6 +109,18 @@ export default function Login() {
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function LoginPoint({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) {
+  return (
+    <div className="flex gap-3 rounded-md border border-white/10 bg-white/[0.03] p-3">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white/10 text-teal-100">{icon}</div>
+      <div>
+        <p className="text-sm font-semibold text-white">{title}</p>
+        <p className="mt-0.5 text-xs leading-5 text-slate-300">{text}</p>
       </div>
     </div>
   );

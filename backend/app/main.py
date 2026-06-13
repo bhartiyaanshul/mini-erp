@@ -9,10 +9,12 @@ from app.core.config import settings
 from app.core.db import engine, init_db
 from app.events.ws import manager
 from app.routers import (
+    assistant,
     audit,
     auth,
     bom,
     dashboard,
+    forecast,
     manufacturing,
     partners,
     products,
@@ -61,6 +63,8 @@ for module in (
     purchase,
     manufacturing,
     dashboard,
+    forecast,
+    assistant,
     audit,
     seed,
 ):

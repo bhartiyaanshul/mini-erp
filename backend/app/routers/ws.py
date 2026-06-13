@@ -7,7 +7,7 @@ router = APIRouter()
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    """Live event feed for the dashboard. Auth-free for demo simplicity —
+    """Live event feed for the dashboard. Auth-free for demo simplicity;
     it only ever pushes non-sensitive operational events."""
     await manager.connect(websocket)
     try:

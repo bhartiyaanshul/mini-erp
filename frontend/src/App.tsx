@@ -5,6 +5,7 @@ import { Layout } from "./components/Layout";
 import { AccessDenied } from "./components/AccessDenied";
 import type { Role } from "./lib/types";
 import Login from "./pages/Login";
+import Landing from "./pages/Landing";
 import Dashboard from "./pages/Dashboard";
 import Products from "./pages/Products";
 import Sales from "./pages/Sales";
@@ -17,7 +18,7 @@ import Audit from "./pages/Audit";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/welcome" replace />;
   return <>{children}</>;
 }
 
@@ -33,6 +34,7 @@ export default function App() {
 
   return (
     <Routes>
+      <Route path="/welcome" element={user ? <Navigate to="/" replace /> : <Landing />} />
       <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
       <Route
         element={

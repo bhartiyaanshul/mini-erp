@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 from sqlmodel import Session
 
 from app.events.bus import emit
@@ -21,6 +23,7 @@ def create_po(
         name=next_seq_name(session, PurchaseOrder, "PO"),
         partner_id=vendor_id or 0,
         origin=origin,
+        expected_receipt_date=datetime.utcnow() + timedelta(days=7),
         created_by_id=user.id if user else None,
         state=PurchaseOrderState.DRAFT,
     )

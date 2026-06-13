@@ -8,7 +8,7 @@ const KIND_COLOR: Record<string, string> = {
   received: "bg-blue-500",
   reserved: "bg-amber-500",
   delivered: "bg-emerald-500",
-  manufactured: "bg-purple-500",
+  manufactured: "bg-indigo-500",
   consumed: "bg-rose-500",
   move: "bg-slate-400",
 };
@@ -24,7 +24,7 @@ export function ProductTimeline({ productId, onClose }: { productId: number | nu
         </div>
       ) : (
         <div>
-          <div className="mb-5 flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
+          <div className="mb-5 flex items-center justify-between rounded-lg border border-teal-100 bg-teal-50 px-4 py-3">
             <p className="font-semibold text-slate-800">{data.product.name}</p>
             <div className="flex gap-5 text-sm">
               <Metric label="On hand" value={data.product.on_hand} />
@@ -34,7 +34,7 @@ export function ProductTimeline({ productId, onClose }: { productId: number | nu
           </div>
 
           {data.events.length === 0 ? (
-            <p className="py-8 text-center text-sm text-slate-400">No movements recorded yet.</p>
+            <p className="py-8 text-center text-sm text-slate-500">No movements recorded yet.</p>
           ) : (
             <ol className="relative ml-2 border-l-2 border-slate-100">
               {data.events.map((ev, i) => (
@@ -56,7 +56,7 @@ export function ProductTimeline({ productId, onClose }: { productId: number | nu
                       {ev.qty}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-slate-500">
                     {fmtDateTime(ev.ts)} · {ev.note || ev.source}
                     {ev.state === "reserved" && " · reserved"}
                   </p>
@@ -73,8 +73,8 @@ export function ProductTimeline({ productId, onClose }: { productId: number | nu
 function Metric({ label, value, highlight }: { label: string; value: number; highlight?: boolean }) {
   return (
     <div className="text-right">
-      <p className="text-[11px] uppercase tracking-wide text-slate-400">{label}</p>
-      <p className={cn("font-semibold", highlight ? "text-brand-600" : "text-slate-700")}>{fmtQty(value)}</p>
+      <p className="text-[11px] uppercase tracking-wide text-slate-500">{label}</p>
+      <p className={cn("font-semibold", highlight ? "text-teal-700" : "text-slate-700")}>{fmtQty(value)}</p>
     </div>
   );
 }

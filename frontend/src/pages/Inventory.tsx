@@ -54,11 +54,11 @@ export default function Inventory() {
                 </thead>
                 <tbody>
                   {products?.map((p) => (
-                    <tr key={p.id} className="border-b border-slate-50 hover:bg-slate-50/60">
+                    <tr key={p.id} className="border-b border-teal-100 hover:bg-teal-50/70">
                       <td className="px-5 py-3 font-medium text-slate-800">{p.name}</td>
                       <td className="px-5 py-3 text-right tabular-nums">{fmtQty(p.on_hand)}</td>
                       <td className="px-5 py-3 text-right tabular-nums text-amber-600">{fmtQty(p.reserved)}</td>
-                      <td className="px-5 py-3 text-right font-semibold tabular-nums text-brand-600">{fmtQty(p.free_to_use)}</td>
+                      <td className="px-5 py-3 text-right font-semibold tabular-nums text-teal-700">{fmtQty(p.free_to_use)}</td>
                       {canAdjust && (
                         <td className="px-5 py-3 text-right">
                           <Button variant="ghost" size="sm" onClick={() => setAdjust(p)}>
@@ -80,7 +80,7 @@ export default function Inventory() {
             </CardHeader>
             <div className="max-h-[420px] overflow-y-auto">
               <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-white">
+                <thead className="sticky top-0 bg-teal-50">
                   <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-400">
                     <th className="px-5 py-3">When</th>
                     <th className="px-5 py-3">Product</th>

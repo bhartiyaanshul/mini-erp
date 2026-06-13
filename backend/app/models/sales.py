@@ -11,6 +11,7 @@ class SaleOrder(SQLModel, table=True):
     partner_id: int = Field(foreign_key="partner.id")
     state: SaleOrderState = Field(default=SaleOrderState.DRAFT, index=True)
     order_date: datetime = Field(default_factory=datetime.utcnow)
+    promise_date: datetime | None = None
     created_by_id: int | None = Field(default=None, foreign_key="user.id")
     created_at: datetime = Field(default_factory=datetime.utcnow)
 

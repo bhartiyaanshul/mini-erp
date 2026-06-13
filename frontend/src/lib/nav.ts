@@ -40,7 +40,7 @@ export const ROLE_META: Record<Role, { label: string; color: string }> = {
   admin: { label: "Admin", color: "bg-slate-800 text-white" },
   sales: { label: "Sales", color: "bg-blue-100 text-blue-700" },
   purchase: { label: "Purchase", color: "bg-amber-100 text-amber-700" },
-  manufacturing: { label: "Manufacturing", color: "bg-purple-100 text-purple-700" },
+  manufacturing: { label: "Manufacturing", color: "bg-indigo-100 text-indigo-700" },
   inventory: { label: "Inventory", color: "bg-emerald-100 text-emerald-700" },
   owner: { label: "Business Owner", color: "bg-rose-100 text-rose-700" },
 };

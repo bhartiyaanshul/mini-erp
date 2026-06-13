@@ -19,7 +19,7 @@ const ACTION_COLOR: Record<string, string> = {
   delivered: "bg-emerald-100 text-emerald-700",
   received: "bg-emerald-100 text-emerald-700",
   completed: "bg-emerald-100 text-emerald-700",
-  auto_manufacture: "bg-purple-100 text-purple-700",
+  auto_manufacture: "bg-indigo-100 text-indigo-700",
   auto_buy: "bg-amber-100 text-amber-700",
   price_updated: "bg-rose-100 text-rose-700",
   stock_adjusted: "bg-amber-100 text-amber-700",

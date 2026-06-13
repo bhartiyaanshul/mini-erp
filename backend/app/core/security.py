@@ -5,7 +5,7 @@ from passlib.context import CryptContext
 
 from app.core.config import settings
 
-# pbkdf2_sha256 is pure-Python (stdlib hashlib) — no native build required,
+# pbkdf2_sha256 is pure-Python (stdlib hashlib), no native build required,
 # and plenty strong for this demo. Swap to bcrypt/argon2 for production.
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 

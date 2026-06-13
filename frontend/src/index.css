@@ -13,8 +13,16 @@ body,
 }
 
 body {
-  @apply bg-slate-50 text-slate-800 antialiased;
+  background: #ecfdf5;
+  color: #334155;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   font-feature-settings: "cv11", "ss01";
+}
+
+::selection {
+  background: #ccfbf1;
+  color: #134e4a;
 }
 
 /* Thin, unobtrusive scrollbars */
@@ -23,10 +31,30 @@ body {
   height: 9px;
 }
 *::-webkit-scrollbar-thumb {
-  @apply bg-slate-300 rounded-full;
+  border-radius: 9999px;
+  background: #99f6e4;
 }
 *::-webkit-scrollbar-track {
   background: transparent;
+}
+
+@layer base {
+  table {
+    @apply border-separate border-spacing-0;
+  }
+
+  th {
+    background: #f0fdfa;
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  td {
+    color: #334155;
+  }
 }
 
 @layer utilities {
@@ -41,6 +69,89 @@ body {
     to {
       opacity: 1;
       transform: translateY(0);
+    }
+  }
+
+  /* Staggered entrance — rises into place with a soft fade */
+  .animate-rise {
+    opacity: 0;
+    animation: rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(14px) scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  /* Gentle perpetual bob for decorative / hero accents */
+  .animate-float {
+    animation: float 7s ease-in-out infinite;
+  }
+  .animate-float-slow {
+    animation: float 11s ease-in-out infinite;
+  }
+  @keyframes float {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0);
+    }
+    50% {
+      transform: translate3d(0, -14px, 0);
+    }
+  }
+
+  /* Drifting gradient orbs — the parallax backdrop layer */
+  .animate-drift {
+    animation: drift 18s ease-in-out infinite;
+  }
+  .animate-drift-rev {
+    animation: drift 22s ease-in-out infinite reverse;
+  }
+  @keyframes drift {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+    33% {
+      transform: translate3d(24px, -18px, 0) scale(1.06);
+    }
+    66% {
+      transform: translate3d(-18px, 12px, 0) scale(0.97);
+    }
+  }
+
+  /* Sheen sweep for the hero panel */
+  .animate-sheen {
+    background-size: 200% 100%;
+    animation: sheen 9s linear infinite;
+  }
+  @keyframes sheen {
+    from {
+      background-position: 200% 0;
+    }
+    to {
+      background-position: -200% 0;
+    }
+  }
+
+  .parallax-scene {
+    perspective: 900px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-rise,
+    .animate-float,
+    .animate-float-slow,
+    .animate-drift,
+    .animate-drift-rev,
+    .animate-sheen {
+      animation: none;
+      opacity: 1;
     }
   }
 }

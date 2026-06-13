@@ -101,6 +101,7 @@ def sale_order_out(session: Session, so: SaleOrder) -> dict:
         "partner_name": _name(session, Partner, so.partner_id),
         "state": so.state.value,
         "order_date": so.order_date.isoformat() if so.order_date else None,
+        "promise_date": so.promise_date.isoformat() if so.promise_date else None,
         "total": round(total, 2),
         "lines": lines,
     }
@@ -130,6 +131,7 @@ def purchase_order_out(session: Session, po: PurchaseOrder) -> dict:
         "state": po.state.value,
         "origin": po.origin,
         "order_date": po.order_date.isoformat() if po.order_date else None,
+        "expected_receipt_date": po.expected_receipt_date.isoformat() if po.expected_receipt_date else None,
         "total": round(total, 2),
         "lines": lines,
     }
@@ -149,6 +151,7 @@ def mo_out(session: Session, mo: ManufacturingOrder) -> dict:
                     "qty_per_unit": bl.qty,
                     "qty_required": round(bl.qty * mo.qty, 4),
                     "free_to_use": avail["free_to_use"],
+                    "shortage": max(0.0, round((bl.qty * mo.qty) - avail["free_to_use"], 4)),
                 }
             )
     work_orders = [
@@ -171,6 +174,8 @@ def mo_out(session: Session, mo: ManufacturingOrder) -> dict:
         "qty": mo.qty,
         "state": mo.state.value,
         "origin": mo.origin,
+        "planned_start": mo.planned_start.isoformat() if mo.planned_start else None,
+        "planned_finish": mo.planned_finish.isoformat() if mo.planned_finish else None,
         "created_at": mo.created_at.isoformat() if mo.created_at else None,
         "components": components,
         "work_orders": work_orders,

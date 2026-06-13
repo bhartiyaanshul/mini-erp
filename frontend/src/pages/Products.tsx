@@ -84,7 +84,7 @@ export default function Products() {
               </thead>
               <tbody>
                 {products.map((p) => (
-                  <tr key={p.id} className="border-b border-slate-50 hover:bg-slate-50/60">
+                  <tr key={p.id} className="border-b border-teal-100 hover:bg-teal-50/70">
                     <td className="px-5 py-3">
                       <p className="font-medium text-slate-800">{p.name}</p>
                       <p className="text-xs text-slate-400">{p.sku || "—"}</p>
@@ -94,7 +94,7 @@ export default function Products() {
                     </td>
                     <td className="px-5 py-3 text-right tabular-nums">{fmtQty(p.on_hand)}</td>
                     <td className="px-5 py-3 text-right tabular-nums text-amber-600">{fmtQty(p.reserved)}</td>
-                    <td className="px-5 py-3 text-right font-semibold tabular-nums text-brand-600">
+                    <td className="px-5 py-3 text-right font-semibold tabular-nums text-teal-700">
                       {fmtQty(p.free_to_use)}
                     </td>
                     <td className="px-5 py-3 text-right tabular-nums">{money(p.sales_price)}</td>
@@ -127,7 +127,7 @@ export default function Products() {
 function StrategyChip({ p }: { p: Product }) {
   if (!p.procure_on_demand) return <Badge className="bg-emerald-100 text-emerald-700">MTS · Stock</Badge>;
   return p.procurement_type === "manufacture" ? (
-    <Badge className="bg-purple-100 text-purple-700">
+    <Badge className="bg-indigo-100 text-indigo-700">
       <Factory className="mr-1 h-3 w-3" /> MTO · Manufacture
     </Badge>
   ) : (
@@ -191,13 +191,13 @@ function ProductForm({ product, onClose }: { product: Product | null; onClose: (
           </div>
         </div>
 
-        <div className="rounded-lg border border-slate-200 p-3">
+        <div className="rounded-lg border border-teal-100 bg-teal-50/50 p-3">
           <label className="flex cursor-pointer items-center gap-2">
             <input
               type="checkbox"
               checked={form.procure_on_demand}
               onChange={(e) => set({ procure_on_demand: e.target.checked })}
-              className="h-4 w-4 rounded border-slate-300 text-brand-600"
+              className="h-4 w-4 rounded border-slate-300 text-teal-700"
             />
             <span className="text-sm font-medium text-slate-700">
               Procure on demand <span className="text-slate-400">(enables MTO automation)</span>

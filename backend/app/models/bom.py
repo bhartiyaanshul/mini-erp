@@ -4,7 +4,7 @@ from sqlmodel import Field, Relationship, SQLModel
 
 
 class BoM(SQLModel, table=True):
-    """Bill of Materials — the recipe for a finished product."""
+    """Bill of Materials: the recipe for a finished product."""
 
     id: int | None = Field(default=None, primary_key=True)
     name: str

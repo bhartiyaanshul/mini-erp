@@ -1,6 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import type { WsEvent } from "./types";
 
 interface LiveCtx {
@@ -41,10 +40,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
 
         setEvents((prev) => [ev, ...prev].slice(0, 50));
 
-        // Any domain event means data changed somewhere — refresh everything.
+        // Any domain event means data changed somewhere, refresh everything.
         qc.invalidateQueries();
-
-        notify(ev);
       };
     }
 
@@ -57,28 +54,6 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   }, [qc]);
 
   return <Ctx.Provider value={{ events, connected }}>{children}</Ctx.Provider>;
-}
-
-function notify(ev: WsEvent) {
-  switch (ev.type) {
-    case "procurement_triggered":
-      toast.success(ev.message, { description: "Automated procurement", duration: 7000 });
-      break;
-    case "manufacturing_order_completed":
-      toast.success(ev.message, { duration: 6000 });
-      break;
-    case "purchase_order_received":
-      toast.success(ev.message);
-      break;
-    case "sale_order_delivered":
-      toast.success(ev.message);
-      break;
-    case "demo_loaded":
-      toast.success(ev.message);
-      break;
-    default:
-      break;
-  }
 }
 
 export const useLive = () => useContext(Ctx);

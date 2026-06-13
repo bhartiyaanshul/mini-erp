@@ -1,14 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./api";
 import type {
+  AssistantReply,
   AuditLog,
   BoM,
+  ChatMessage,
   ConfirmResult,
   DashboardMetrics,
+  ForecastResponse,
+  ForecastRow,
   ManufacturingOrder,
   Partner,
+  PendingAction,
   Product,
   ProductTimeline,
+  ProcurementResult,
   PurchaseOrder,
   SaleOrder,
   StockMove,
@@ -45,6 +51,14 @@ export const useDashboard = () =>
 
 export const useLowStock = () =>
   useQuery({ queryKey: ["low-stock"], queryFn: () => get<any[]>("/dashboard/low-stock") });
+
+// Deterministic forecast rows. Gated by `enabled` so it only runs on demand.
+export const useForecast = (enabled = true) =>
+  useQuery({ queryKey: ["forecast"], queryFn: () => get<ForecastRow[]>("/forecast"), enabled });
+
+// Rows + AI (Groq) briefing. Gated by `enabled` so the LLM call only fires on a click.
+export const useForecastBriefing = (enabled = true) =>
+  useQuery({ queryKey: ["forecast-briefing"], queryFn: () => get<ForecastResponse>("/forecast/briefing"), enabled });
 
 export const useAudit = (entity_type?: string) =>
   useQuery({
@@ -133,3 +147,20 @@ export const useCreateBom = () =>
 
 export const useLoadDemo = () =>
   useInvalidatingMutation(() => api.post("/seed/demo").then((r) => r.data));
+
+export const useActOnForecast = () =>
+  useInvalidatingMutation((body: { product_id: number; qty: number }) =>
+    api.post<ProcurementResult>("/forecast/act", body).then((r) => r.data)
+  );
+
+// Copilot: chat is a plain mutation (no cache to touch); execute invalidates everything.
+export const useAssistantChat = () =>
+  useMutation({
+    mutationFn: (messages: ChatMessage[]) =>
+      api.post<AssistantReply>("/assistant/chat", { messages }).then((r) => r.data),
+  });
+
+export const useAssistantExecute = () =>
+  useInvalidatingMutation((action: PendingAction) =>
+    api.post<{ message: string }>("/assistant/execute", { action: { type: action.type, args: action.args } }).then((r) => r.data)
+  );

@@ -12,7 +12,7 @@ def confirm_order(session: Session, so: SaleOrder, *, user=None) -> dict:
 
     This is the MTS/MTO fork: an in-stock line reserves and ships from
     inventory; a short line (with procure_on_demand) fires automation.
-    A mixed line does both — reserve 5, procure 15.
+    A mixed line does both: reserve 5, procure 15.
     """
     if so.state != SaleOrderState.DRAFT:
         raise ValueError(f"Sale order {so.name} cannot be confirmed from state '{so.state.value}'")

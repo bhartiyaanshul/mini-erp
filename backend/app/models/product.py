@@ -8,8 +8,8 @@ from app.models.enums import ProcurementType
 class Product(SQLModel, table=True):
     """Central inventory model.
 
-    Note the deliberate absence of any stock column — on-hand / reserved /
-    free-to-use are *derived* from the StockMove ledger, never stored.
+    Note the deliberate absence of any stock column: on-hand / reserved /
+    free-to-use are derived from the StockMove ledger, never stored.
     """
 
     id: int | None = Field(default=None, primary_key=True)

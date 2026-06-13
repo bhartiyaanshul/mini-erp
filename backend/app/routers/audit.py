@@ -26,8 +26,7 @@ def list_logs(
 
 @router.get("/timeline/{product_id}")
 def product_timeline(product_id: int, session: Session = Depends(get_session), _: User = Depends(get_current_user)):
-    """The full movement story of one product, built from the ledger — the
-    feature that makes 'end-to-end traceability' tangible."""
+    """All stock movements for one product, built from the ledger."""
     product = session.get(Product, product_id)
     if not product:
         raise HTTPException(404, "Product not found")

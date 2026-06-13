@@ -68,7 +68,7 @@ export default function Manufacturing() {
               </thead>
               <tbody>
                 {orders.map((o) => (
-                  <tr key={o.id} onClick={() => setSelected(o)} className="cursor-pointer border-b border-slate-50 hover:bg-slate-50/60">
+                  <tr key={o.id} onClick={() => setSelected(o)} className="cursor-pointer border-b border-teal-100 hover:bg-teal-50/70">
                     <td className="px-5 py-3 font-medium text-slate-800">{o.name}</td>
                     <td className="px-5 py-3">{o.product_name}</td>
                     <td className="px-5 py-3 text-right tabular-nums">{fmtQty(o.qty)}</td>

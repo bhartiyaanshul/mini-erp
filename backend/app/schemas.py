@@ -129,4 +129,29 @@ class MOIn(BaseModel):
     bom_id: int | None = None
 
 
+# --- Forecast / predictive procurement ------------------------------------
+class ForecastActIn(BaseModel):
+    product_id: int
+    qty: float = Field(gt=0)
+
+
+# --- Assistant / Copilot --------------------------------------------------
+class ChatMessageIn(BaseModel):
+    role: str
+    content: str
+
+
+class ChatIn(BaseModel):
+    messages: list[ChatMessageIn]
+
+
+class AssistantActionIn(BaseModel):
+    type: str
+    args: dict = {}
+
+
+class AssistantExecuteIn(BaseModel):
+    action: AssistantActionIn
+
+
 TokenOut.model_rebuild()

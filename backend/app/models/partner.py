@@ -6,7 +6,7 @@ from app.models.enums import PartnerType
 
 
 class Partner(SQLModel, table=True):
-    """A customer, a vendor, or both — one table, role distinguished by type."""
+    """A customer, a vendor, or both: one table, role distinguished by type."""
 
     id: int | None = Field(default=None, primary_key=True)
     name: str = Field(index=True)

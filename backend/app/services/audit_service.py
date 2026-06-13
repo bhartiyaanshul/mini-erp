@@ -13,7 +13,7 @@ def log(
     user_id: int | None = None,
     payload: dict | None = None,
 ) -> AuditLog:
-    """Append an audit entry. Flush-only — the caller owns the commit."""
+    """Append an audit entry. Flush-only; the caller owns the commit."""
     entry = AuditLog(
         entity_type=entity_type,
         entity_id=entity_id,

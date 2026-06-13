@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 from sqlmodel import Session, select
 
 from app.events.bus import emit
@@ -18,12 +20,16 @@ def create_mo(
     commit: bool = True,
 ) -> ManufacturingOrder:
     product = session.get(Product, product_id)
+    planned_start = datetime.utcnow()
+    planned_finish = planned_start + timedelta(days=max(1, round(qty / 8)))
     mo = ManufacturingOrder(
         name=next_seq_name(session, ManufacturingOrder, "MO"),
         product_id=product_id,
         bom_id=product.bom_id if product else None,
         qty=qty,
         origin=origin,
+        planned_start=planned_start,
+        planned_finish=planned_finish,
         created_by_id=user.id if user else None,
         state=MOState.DRAFT,
     )
@@ -54,21 +60,47 @@ def confirm_mo(session: Session, mo: ManufacturingOrder, *, user=None, commit: b
         raise ValueError(f"MO {mo.name} cannot be confirmed from state '{mo.state.value}'")
 
     consumption: list[dict] = []
+    procurements: list[dict] = []
     if mo.bom_id:
         lines = session.exec(select(BoMLine).where(BoMLine.bom_id == mo.bom_id)).all()
         for bl in lines:
             need = bl.qty * mo.qty
-            inventory_service.create_move(
-                session,
-                product_id=bl.component_product_id,
-                qty=need,
-                move_type=MoveType.OUT,
-                source=MoveSource.MANUFACTURING_CONSUME,
-                state=MoveState.RESERVED,
-                source_doc_id=mo.id,
-                note=f"Reserved for {mo.name}",
+            avail = inventory_service.get_availability(session, bl.component_product_id)
+            reserve_qty = max(0.0, min(avail["free_to_use"], need))
+            shortage = round(need - reserve_qty, 4)
+            if reserve_qty > 0:
+                inventory_service.create_move(
+                    session,
+                    product_id=bl.component_product_id,
+                    qty=reserve_qty,
+                    move_type=MoveType.OUT,
+                    source=MoveSource.MANUFACTURING_CONSUME,
+                    state=MoveState.RESERVED,
+                    source_doc_id=mo.id,
+                    note=f"Reserved for {mo.name}",
+                )
+            consumption.append(
+                {
+                    "component_product_id": bl.component_product_id,
+                    "qty_required": need,
+                    "qty_reserved": reserve_qty,
+                    "shortage": shortage,
+                }
             )
-            consumption.append({"component_product_id": bl.component_product_id, "qty": need})
+            if shortage > 0:
+                component = session.get(Product, bl.component_product_id)
+                if component and component.procure_on_demand:
+                    from app.services import procurement_service
+
+                    res = procurement_service.procure(
+                        session,
+                        product_id=bl.component_product_id,
+                        qty=shortage,
+                        origin=f"{mo.origin or mo.name} / {mo.name} component",
+                        user=user,
+                    )
+                    res["component_for"] = mo.name
+                    procurements.append(res)
 
         ops = session.exec(
             select(BoMOperation).where(BoMOperation.bom_id == mo.bom_id).order_by(BoMOperation.sequence)
@@ -93,14 +125,72 @@ def confirm_mo(session: Session, mo: ManufacturingOrder, *, user=None, commit: b
         entity_type="manufacturing_order",
         entity_id=mo.id,
         action="confirmed",
-        description=f"{mo.name} confirmed — components reserved, work orders generated",
+        description=f"{mo.name} confirmed — components reserved, shortages procured, work orders generated",
         user_id=user.id if user else None,
-        payload={"consumption": consumption},
+        payload={"consumption": consumption, "procurements": [p["message"] for p in procurements]},
     )
     if commit:
         session.commit()
         emit("manufacturing_order_confirmed", {"id": mo.id, "name": mo.name})
-    return {"mo": mo, "consumption": consumption}
+        for p in procurements:
+            if p["kind"] in ("manufacture", "buy"):
+                emit(
+                    "procurement_triggered",
+                    {
+                        "kind": p["kind"],
+                        "doc_name": p["doc_name"],
+                        "doc_id": p["doc_id"],
+                        "qty": p["qty"],
+                        "product": p["product"],
+                        "origin": mo.name,
+                    },
+                    message=p["message"],
+                )
+        emit("stock_changed", {})
+    return {"mo": mo, "consumption": consumption, "procurements": procurements}
+
+
+def _component_requirements(session: Session, mo: ManufacturingOrder) -> dict[int, float]:
+    if not mo.bom_id:
+        return {}
+    lines = session.exec(select(BoMLine).where(BoMLine.bom_id == mo.bom_id)).all()
+    return {bl.component_product_id: round(bl.qty * mo.qty, 4) for bl in lines}
+
+
+def _reserved_qty_by_component(session: Session, mo: ManufacturingOrder) -> dict[int, float]:
+    reserved = inventory_service.reserved_moves_for(
+        session, source=MoveSource.MANUFACTURING_CONSUME, source_doc_id=mo.id
+    )
+    totals: dict[int, float] = {}
+    for mv in reserved:
+        totals[mv.product_id] = round(totals.get(mv.product_id, 0.0) + mv.qty, 4)
+    return totals
+
+
+def _top_up_component_reservations(session: Session, mo: ManufacturingOrder) -> list[dict]:
+    topped: list[dict] = []
+    requirements = _component_requirements(session, mo)
+    reserved = _reserved_qty_by_component(session, mo)
+    for product_id, required in requirements.items():
+        missing = round(required - reserved.get(product_id, 0.0), 4)
+        if missing <= 0:
+            continue
+        free = inventory_service.get_availability(session, product_id)["free_to_use"]
+        qty = max(0.0, min(free, missing))
+        if qty <= 0:
+            continue
+        inventory_service.create_move(
+            session,
+            product_id=product_id,
+            qty=qty,
+            move_type=MoveType.OUT,
+            source=MoveSource.MANUFACTURING_CONSUME,
+            state=MoveState.RESERVED,
+            source_doc_id=mo.id,
+            note=f"Reserved for {mo.name}",
+        )
+        topped.append({"product_id": product_id, "qty": qty})
+    return topped
 
 
 def complete_mo(session: Session, mo: ManufacturingOrder, *, user=None, commit: bool = True) -> dict:
@@ -108,6 +198,25 @@ def complete_mo(session: Session, mo: ManufacturingOrder, *, user=None, commit: 
         raise ValueError(f"MO {mo.name} cannot be completed from state '{mo.state.value}'")
 
     product = session.get(Product, mo.product_id)
+    _top_up_component_reservations(session, mo)
+    requirements = _component_requirements(session, mo)
+    reserved_totals = _reserved_qty_by_component(session, mo)
+    missing = [
+        {
+            "product_id": pid,
+            "required": required,
+            "reserved": reserved_totals.get(pid, 0.0),
+            "shortage": round(required - reserved_totals.get(pid, 0.0), 4),
+        }
+        for pid, required in requirements.items()
+        if reserved_totals.get(pid, 0.0) + 1e-9 < required
+    ]
+    if missing:
+        names = []
+        for item in missing:
+            component = session.get(Product, item["product_id"])
+            names.append(f"{component.name if component else item['product_id']} short {item['shortage']:g}")
+        raise ValueError(f"Cannot complete {mo.name}; component procurement is still pending: {', '.join(names)}")
 
     # Consume reserved components: flip reserved OUT -> done OUT.
     reserved = inventory_service.reserved_moves_for(

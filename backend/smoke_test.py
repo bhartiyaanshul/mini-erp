@@ -5,10 +5,13 @@ Exercises the full demo story: auth + RBAC, seed, MTS delivery, MTO
 dashboard metrics, and the per-product audit timeline.
 """
 import os
+import tempfile
 
 # Fresh DB each run.
-if os.path.exists("mini_erp.db"):
-    os.remove("mini_erp.db")
+db_path = os.path.join(tempfile.gettempdir(), "mini_erp_smoke.db")
+if os.path.exists(db_path):
+    os.remove(db_path)
+os.environ["DATABASE_URL"] = f"sqlite:///{db_path}"
 
 from fastapi.testclient import TestClient  # noqa: E402
 

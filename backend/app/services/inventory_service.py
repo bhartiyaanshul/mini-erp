@@ -30,7 +30,7 @@ def get_availability(session: Session, product_id: int) -> dict:
 
 
 def availability_map(session: Session, product_ids: list[int]) -> dict[int, dict]:
-    """Batch availability for list views — avoids an N+1 over the ledger."""
+    """Batch availability for list views; avoids an N+1 over the ledger."""
     result = {pid: {"on_hand": 0.0, "reserved": 0.0, "free_to_use": 0.0} for pid in product_ids}
     if not product_ids:
         return result
@@ -60,8 +60,14 @@ def create_move(
     state: MoveState = MoveState.DONE,
     source_doc_id: int | None = None,
     note: str = "",
+    done_at: datetime | None = None,
 ) -> StockMove:
-    """The ONLY path that writes stock movements. Flush-only; caller commits."""
+    """The ONLY path that writes stock movements. Flush-only; caller commits.
+
+    `done_at` is normally stamped to now for DONE moves; callers may pass an
+    explicit timestamp to backfill dated history (e.g. seeded demand) so the
+    ledger reflects when a move actually happened.
+    """
     move = StockMove(
         product_id=product_id,
         qty=qty,
@@ -70,7 +76,7 @@ def create_move(
         state=state,
         source_doc_id=source_doc_id,
         note=note,
-        done_at=datetime.utcnow() if state == MoveState.DONE else None,
+        done_at=(done_at or datetime.utcnow()) if state == MoveState.DONE else None,
     )
     session.add(move)
     session.flush()
