@@ -1,0 +1,10 @@
+fastapi==0.115.6
+uvicorn==0.34.0
+websockets==14.1
+sqlmodel==0.0.22
+pydantic-settings==2.7.1
+PyJWT==2.10.1
+passlib==1.7.4
+python-multipart==0.0.20
+email-validator==2.2.0
+APScheduler==3.11.0
