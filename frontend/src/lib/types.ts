@@ -3,6 +3,24 @@ export type AccessLevel = "none" | "user" | "admin";
 
 export const MODULES: Module[] = ["sales", "purchase", "manufacturing", "product"];
 
+/** The branded documents a record can produce, served by /api/documents. */
+export type DocType = "sale_order" | "invoice" | "delivery_note" | "purchase_order" | "mo_traveler";
+
+/** Per-tenant identity printed on every document, edited in Company Settings. */
+export interface CompanyBranding {
+  id: number;
+  name: string;
+  address: string;
+  email: string;
+  phone: string;
+  website: string;
+  logo: string; // base64 image data-URL, or ""
+  brand_color: string; // hex accent
+  gstin: string;
+  gst_rate: number; // default GST % on invoices
+  invoice_footer: string;
+}
+
 export interface User {
   id: number;
   username: string;
@@ -84,6 +102,7 @@ export interface SaleOrder {
   name: string;
   partner_id: number;
   partner_name: string;
+  partner_email?: string | null;
   state: "draft" | "confirmed" | "partially_delivered" | "fully_delivered" | "cancelled";
   order_date: string;
   promise_date: string | null;
@@ -96,12 +115,63 @@ export interface PurchaseOrder {
   name: string;
   partner_id: number;
   partner_name: string;
+  partner_email?: string | null;
   state: "draft" | "confirmed" | "partially_received" | "fully_received" | "cancelled";
   origin: string;
   order_date: string;
   expected_receipt_date: string | null;
   total: number;
   lines: OrderLine[];
+}
+
+export type ReturnState = "draft" | "completed" | "cancelled";
+
+export interface ReturnLine {
+  id: number;
+  sale_order_line_id: number;
+  product_id: number;
+  product_name: string;
+  qty: number;
+  qty_scrap: number;
+  qty_restock: number;
+  unit_price: number;
+  subtotal: number;
+}
+
+export interface CustomerReturn {
+  id: number;
+  name: string;
+  sale_order_id: number;
+  sale_order_name: string | null;
+  partner_id: number;
+  partner_name: string;
+  partner_email?: string | null;
+  state: ReturnState;
+  reason: string;
+  credit_total: number;
+  created_at: string;
+  processed_at: string | null;
+  lines: ReturnLine[];
+}
+
+/** A delivered order line still eligible to come back, served by /returns/returnable. */
+export interface ReturnableLine {
+  sale_order_line_id: number;
+  product_id: number;
+  product_name: string;
+  unit_price: number;
+  qty_delivered: number;
+  qty_returned: number;
+  returnable: number;
+}
+
+export interface ReturnableOrder {
+  id: number;
+  name: string;
+  partner_id: number;
+  partner_name: string;
+  order_date: string | null;
+  lines: ReturnableLine[];
 }
 
 export interface ProcurementResult {
@@ -191,6 +261,55 @@ export interface OrderJourney {
   track_path?: string;
 }
 
+export interface TimeMachineRow {
+  product_id: number;
+  name: string;
+  sku: string;
+  uom: string;
+  on_hand: number;
+  unit_cost: number;
+  value: number;
+}
+
+export interface TimeMachineSnapshot {
+  at: string;
+  total_value: number;
+  total_units: number;
+  sku_count: number;
+  rows: TimeMachineRow[];
+}
+
+export interface TimeMachineSeriesPoint {
+  t: string;
+  value: number;
+  on_hand?: number;
+}
+
+export interface TimeMachineSeries {
+  start: string;
+  end: string;
+  bucket: string;
+  points: TimeMachineSeriesPoint[];
+}
+
+export interface TimeMachineRange {
+  earliest: string;
+  latest: string;
+}
+
+export interface ActivityEvent {
+  ts: string;
+  kind: string;
+  label: string;
+  detail: string;
+}
+
+export interface ActivityFeed {
+  start: string;
+  end: string;
+  events: ActivityEvent[];
+}
+
 export interface AtRiskOrder {
   id: number;
   name: string;
@@ -240,7 +359,25 @@ export interface BoM {
   operations: BoMOperation[];
 }
 
+export interface ProductSales {
+  product_id: number;
+  name: string;
+  sku: string;
+  qty: number;
+  value: number;
+}
+
+export interface TrendPoint {
+  date: string;
+  sales: number;
+  purchases: number;
+}
+
 export interface DashboardMetrics {
+  total_sales_value: number;
+  total_purchase_value: number;
+  sales_by_product: ProductSales[];
+  sales_purchase_trend: TrendPoint[];
   total_sales_orders: number;
   pending_deliveries: number;
   manufacturing_orders: number;

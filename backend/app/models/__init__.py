@@ -15,6 +15,7 @@ from app.models.enums import (
     PartnerType,
     ProcurementType,
     PurchaseOrderState,
+    ReturnState,
     SaleOrderState,
     WorkOrderState,
 )
@@ -22,6 +23,7 @@ from app.models.manufacturing import ManufacturingOrder, WorkOrder
 from app.models.partner import Partner
 from app.models.product import Product
 from app.models.purchase import PurchaseOrder, PurchaseOrderLine
+from app.models.returns import CustomerReturn, CustomerReturnLine
 from app.models.sales import SaleOrder, SaleOrderLine
 from app.models.signup_request import SignupRequest
 from app.models.stock import StockMove
@@ -33,6 +35,8 @@ __all__ = [
     "BoMLine",
     "BoMOperation",
     "Company",
+    "CustomerReturn",
+    "CustomerReturnLine",
     "ManufacturingOrder",
     "WorkOrder",
     "Partner",
@@ -55,6 +59,7 @@ __all__ = [
     "PartnerType",
     "ProcurementType",
     "PurchaseOrderState",
+    "ReturnState",
     "SaleOrderState",
     "WorkOrderState",
 ]

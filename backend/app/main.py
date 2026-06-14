@@ -21,16 +21,20 @@ from app.routers import (
     audit,
     auth,
     bom,
+    company,
     dashboard,
+    documents,
     forecast,
     manufacturing,
     partners,
     products,
     public,
     purchase,
+    returns,
     sales,
     seed,
     stock,
+    timemachine,
     users,
     ws,
 )
@@ -82,6 +86,10 @@ for module in (
     audit,
     seed,
     public,
+    timemachine,
+    company,
+    documents,
+    returns,
 ):
     app.include_router(module.router)
 

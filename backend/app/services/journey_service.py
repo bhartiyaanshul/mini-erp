@@ -17,6 +17,7 @@ from sqlmodel import Session, select
 from app.core.security import create_track_token
 from app.models import (
     Company,
+    CustomerReturn,
     ManufacturingOrder,
     Partner,
     Product,
@@ -26,6 +27,7 @@ from app.models import (
 from app.models.enums import (
     MOState,
     PurchaseOrderState,
+    ReturnState,
     SaleOrderState,
     WorkOrderState,
 )
@@ -209,6 +211,29 @@ def build_journey(session: Session, so: SaleOrder) -> dict:
         else:
             deliver_detail = "Awaiting dispatch"
         add("delivered", "Delivered", deliver_detail, done=state == SaleOrderState.FULLY_DELIVERED)
+
+        # A reverse flow linked back here: surface any processed customer return.
+        returns = list(
+            session.exec(
+                select(CustomerReturn).where(
+                    CustomerReturn.company_id == so.company_id,
+                    CustomerReturn.sale_order_id == so.id,
+                    CustomerReturn.state == ReturnState.COMPLETED,
+                )
+            ).all()
+        )
+        if returns:
+            rqty = round(sum(ln.qty for r in returns for ln in r.lines), 4)
+            rcredit = round(sum(r.credit_total for r in returns), 2)
+            latest = max((r.processed_at for r in returns if r.processed_at), default=None)
+            add(
+                "returned",
+                "Returned & credited",
+                f"{fmt_qty(rqty)} unit(s) returned · credit note {rcredit:g}",
+                done=True,
+                ts=latest,
+                docs=[{"type": "RMA", "name": r.name, "state": r.state.value} for r in returns],
+            )
 
         _mark_current(steps)
         percent, status_label = _finalize(steps, cancelled=False)

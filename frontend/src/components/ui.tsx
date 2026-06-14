@@ -171,6 +171,7 @@ const STATE_COLORS: Record<string, string> = {
   fully_delivered: "bg-emerald-100 text-emerald-700",
   fully_received: "bg-emerald-100 text-emerald-700",
   done: "bg-emerald-100 text-emerald-700",
+  completed: "bg-emerald-100 text-emerald-700",
   pending: "bg-slate-100 text-slate-600",
   cancelled: "bg-rose-100 text-rose-700",
 };

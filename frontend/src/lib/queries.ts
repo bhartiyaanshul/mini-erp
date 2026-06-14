@@ -6,7 +6,9 @@ import type {
   AuditLog,
   BoM,
   ChatMessage,
+  CompanyBranding,
   ConfirmResult,
+  CustomerReturn,
   DashboardMetrics,
   ForecastResponse,
   ForecastRow,
@@ -18,8 +20,13 @@ import type {
   ProductTimeline,
   ProcurementResult,
   PurchaseOrder,
+  ReturnableOrder,
   SaleOrder,
   StockMove,
+  ActivityFeed,
+  TimeMachineRange,
+  TimeMachineSeries,
+  TimeMachineSnapshot,
 } from "./types";
 
 const get = <T>(url: string) => api.get<T>(url).then((r) => r.data);
@@ -99,6 +106,39 @@ export const useStockMoves = (productId?: number) =>
     queryFn: () => get<StockMove[]>(`/stock/moves${productId ? `?product_id=${productId}` : ""}`),
   });
 
+/* ------------------------------ Time Machine ------------------------------ */
+export const useTimeMachineRange = () =>
+  useQuery({ queryKey: ["tm-range"], queryFn: () => get<TimeMachineRange>("/timemachine/range") });
+
+// `at` is an ISO instant. placeholderData keeps the previous snapshot on screen
+// while a new one loads, so dragging the slider doesn't flicker.
+export const useTimeMachineSnapshot = (at?: string, hideEmpty = true) =>
+  useQuery({
+    queryKey: ["tm-snapshot", at, hideEmpty],
+    queryFn: () =>
+      get<TimeMachineSnapshot>(`/timemachine/snapshot?at=${encodeURIComponent(at!)}&hide_empty=${hideEmpty}`),
+    enabled: !!at,
+    placeholderData: (prev) => prev,
+  });
+
+// Range-based valuation series; the backend auto-picks hour/day buckets by span.
+export const useTimeMachineSeries = (start?: string, end?: string) =>
+  useQuery({
+    queryKey: ["tm-series", start, end],
+    queryFn: () =>
+      get<TimeMachineSeries>(`/timemachine/series?start=${encodeURIComponent(start!)}&end=${encodeURIComponent(end!)}`),
+    enabled: !!(start && end),
+  });
+
+// Chronological operational events in the window, for the timelapse.
+export const useTimeMachineActivity = (start?: string, end?: string) =>
+  useQuery({
+    queryKey: ["tm-activity", start, end],
+    queryFn: () =>
+      get<ActivityFeed>(`/timemachine/activity?start=${encodeURIComponent(start!)}&end=${encodeURIComponent(end!)}`),
+    enabled: !!(start && end),
+  });
+
 /* -------------------------------- Mutations -------------------------------- */
 function useInvalidatingMutation<TArgs, TResult>(fn: (args: TArgs) => Promise<TResult>) {
   const qc = useQueryClient();
@@ -138,6 +178,23 @@ export const useDeliverSale = () =>
 export const useCancelSale = () =>
   useInvalidatingMutation((id: number) => api.post(`/sales/${id}/cancel`).then((r) => r.data));
 
+/* --------------------------------- Returns -------------------------------- */
+export const useReturns = (enabled = true) =>
+  useQuery({ queryKey: ["returns"], queryFn: () => get<CustomerReturn[]>("/returns"), enabled });
+
+// Delivered orders that still have units eligible to come back; feeds the new-return form.
+export const useReturnableOrders = (enabled = true) =>
+  useQuery({ queryKey: ["returnable"], queryFn: () => get<ReturnableOrder[]>("/returns/returnable"), enabled });
+
+export const useCreateReturn = () =>
+  useInvalidatingMutation((body: any) => api.post<CustomerReturn>("/returns", body).then((r) => r.data));
+
+export const useProcessReturn = () =>
+  useInvalidatingMutation((id: number) => api.post(`/returns/${id}/process`).then((r) => r.data));
+
+export const useCancelReturn = () =>
+  useInvalidatingMutation((id: number) => api.post(`/returns/${id}/cancel`).then((r) => r.data));
+
 export const useCreatePO = () =>
   useInvalidatingMutation((body: any) => api.post<PurchaseOrder>("/purchase", body).then((r) => r.data));
 
@@ -167,6 +224,18 @@ export const useCreateBom = () =>
 
 export const useLoadDemo = () =>
   useInvalidatingMutation(() => api.post("/seed/demo").then((r) => r.data));
+
+/* ------------------------------ Company branding --------------------------- */
+export const useCompany = (enabled = true) =>
+  useQuery({ queryKey: ["company"], queryFn: () => get<CompanyBranding>("/company"), enabled });
+
+export const useUpdateCompany = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Partial<CompanyBranding>) => api.put<CompanyBranding>("/company", body).then((r) => r.data),
+    onSuccess: (data) => qc.setQueryData(["company"], data),
+  });
+};
 
 /* ----------------------------- User management ----------------------------- */
 export const useUsers = (enabled = true) =>

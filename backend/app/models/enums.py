@@ -54,6 +54,8 @@ class MoveSource(str, Enum):
     MANUFACTURING_CONSUME = "manufacturing_consume"
     MANUFACTURING_PRODUCE = "manufacturing_produce"
     ADJUSTMENT = "adjustment"
+    RETURN = "return"  # customer return restocking goods (reverse IN move)
+    SCRAP = "scrap"  # writing off unsellable returned goods (OUT move)
 
 
 class SaleOrderState(str, Enum):
@@ -61,6 +63,16 @@ class SaleOrderState(str, Enum):
     CONFIRMED = "confirmed"
     PARTIALLY_DELIVERED = "partially_delivered"
     FULLY_DELIVERED = "fully_delivered"
+    CANCELLED = "cancelled"
+
+
+class ReturnState(str, Enum):
+    """Lifecycle of a customer return / RMA. DRAFT lets the operator review the
+    restock/scrap split and credit before the ledger moves are posted; processing
+    finalizes it to COMPLETED. Only a DRAFT can be CANCELLED."""
+
+    DRAFT = "draft"
+    COMPLETED = "completed"
     CANCELLED = "cancelled"
 
 

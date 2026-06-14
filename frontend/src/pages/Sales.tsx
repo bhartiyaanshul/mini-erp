@@ -13,6 +13,7 @@ import {
 } from "@/lib/queries";
 import { api, apiError } from "@/lib/api";
 import { OrderJourney } from "@/components/OrderJourney";
+import { DocumentActions } from "@/components/DocumentActions";
 import { money, qty as fmtQty, fmtDateTime } from "@/lib/utils";
 import type { ProcurementResult, SaleOrder } from "@/lib/types";
 import {
@@ -359,6 +360,12 @@ function SaleDetail({ order, onClose }: { order: SaleOrder; onClose: () => void 
       <div className="mb-4 flex items-center justify-between gap-3">
         <StateBadge state={order.state} />
         <div className="flex items-center gap-3">
+          <DocumentActions
+            recordId={order.id}
+            recordName={order.name}
+            defaultEmail={order.partner_email}
+            docs={[{ type: "sale_order" }, { type: "invoice" }, { type: "delivery_note" }]}
+          />
           <Button variant="ghost" size="sm" onClick={shareLink} loading={sharing}>
             <Link2 className="h-4 w-4" /> Share tracking link
           </Button>

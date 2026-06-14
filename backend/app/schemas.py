@@ -1,3 +1,5 @@
+import re
+
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.core.validation import validate_username, validate_photo, validate_strong_password
@@ -142,6 +144,73 @@ class UserAdminOut(BaseModel):
 class CompanyOut(BaseModel):
     id: int
     name: str
+    address: str = ""
+    email: str = ""
+    phone: str = ""
+    website: str = ""
+    logo: str = ""
+    brand_color: str = "#0f766e"
+    gstin: str = ""
+    gst_rate: float = 0.0
+    invoice_footer: str = ""
+
+
+class CompanyBrandingIn(BaseModel):
+    """Owner-editable company identity. Every field is optional; a field left
+    unset (None) is untouched, so the editor can patch one thing at a time."""
+
+    name: str | None = None
+    address: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    website: str | None = None
+    logo: str | None = None  # data-URL to set, "" to clear, None to leave as-is
+    brand_color: str | None = None
+    gstin: str | None = None
+    gst_rate: float | None = None
+    invoice_footer: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        v = v.strip()
+        if not v:
+            raise ValueError("Company name cannot be empty.")
+        return v
+
+    @field_validator("logo")
+    @classmethod
+    def _logo(cls, v: str | None) -> str | None:
+        # None = leave unchanged; "" = clear; otherwise must be a valid image data-URL.
+        return None if v is None else validate_photo(v)
+
+    @field_validator("brand_color")
+    @classmethod
+    def _color(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        v = v.strip()
+        if not re.fullmatch(r"#[0-9a-fA-F]{6}", v):
+            raise ValueError("Brand colour must be a hex value like #0f766e.")
+        return v.lower()
+
+    @field_validator("gst_rate")
+    @classmethod
+    def _rate(cls, v: float | None) -> float | None:
+        if v is None:
+            return None
+        if not (0 <= v <= 100):
+            raise ValueError("GST rate must be between 0 and 100.")
+        return float(v)
+
+
+class DocumentEmailIn(BaseModel):
+    """Body for emailing a generated document PDF to a counterparty."""
+
+    to: str | None = None  # override; defaults to the record's partner email
+    message: str | None = None  # optional note prepended to the email body
 
 
 # --- Partners -------------------------------------------------------------
@@ -235,6 +304,19 @@ class ReceiveLineIn(BaseModel):
 
 class ReceiveIn(BaseModel):
     lines: list[ReceiveLineIn] | None = None  # None = receive everything outstanding
+
+
+# --- Returns / RMA --------------------------------------------------------
+class ReturnLineIn(BaseModel):
+    sale_order_line_id: int
+    qty: float = Field(gt=0)  # units coming back on this line
+    qty_scrap: float = 0.0  # of which scrapped (0..qty); the remainder restocks
+
+
+class ReturnIn(BaseModel):
+    sale_order_id: int
+    reason: str = ""
+    lines: list[ReturnLineIn]
 
 
 # --- Manufacturing --------------------------------------------------------

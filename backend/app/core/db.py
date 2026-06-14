@@ -50,6 +50,17 @@ def _ensure_sqlite_columns() -> None:
         "auditlog",
     )
     additions = {
+        "company": {
+            "address": "VARCHAR",
+            "email": "VARCHAR",
+            "phone": "VARCHAR",
+            "website": "VARCHAR",
+            "logo": "TEXT",
+            "brand_color": "VARCHAR",
+            "gstin": "VARCHAR",
+            "gst_rate": "FLOAT",
+            "invoice_footer": "TEXT",
+        },
         "saleorder": {"promise_date": "DATETIME", "company_id": "INTEGER"},
         "purchaseorder": {"expected_receipt_date": "DATETIME", "company_id": "INTEGER"},
         "manufacturingorder": {
@@ -89,6 +100,11 @@ def _ensure_sqlite_columns() -> None:
         for table in company_tables:
             if table in existing_tables:
                 conn.execute(text(f"UPDATE {table} SET company_id = 1 WHERE company_id IS NULL"))
+
+        # Give freshly-ALTERed companies the default accent so the branding
+        # editor's colour input has a sensible starting value (ALTER fills NULL).
+        if "company" in existing_tables:
+            conn.execute(text("UPDATE company SET brand_color = '#0f766e' WHERE brand_color IS NULL OR brand_color = ''"))
 
         # Carry old role semantics forward: admins/owners become System Admins.
         if "user" in existing_tables:

@@ -7,10 +7,12 @@ from app.models import (
     BoMLine,
     BoMOperation,
     Company,
+    CustomerReturn,
     ManufacturingOrder,
     Partner,
     Product,
     PurchaseOrder,
+    ReturnState,
     SaleOrder,
     StockMove,
     User,
@@ -24,6 +26,31 @@ def _name(session: Session, model, _id):
         return None
     obj = session.get(model, _id)
     return getattr(obj, "name", None) if obj else None
+
+
+def _attr(session: Session, model, _id, attr: str):
+    if _id is None:
+        return None
+    obj = session.get(model, _id)
+    return getattr(obj, attr, None) if obj else None
+
+
+def company_out(c: Company) -> dict:
+    """Branding/identity view of a company, used by the settings editor and the
+    document generator. Coalesces a missing accent to the default teal."""
+    return {
+        "id": c.id,
+        "name": c.name,
+        "address": c.address or "",
+        "email": c.email or "",
+        "phone": c.phone or "",
+        "website": c.website or "",
+        "logo": c.logo or "",
+        "brand_color": c.brand_color or "#0f766e",
+        "gstin": c.gstin or "",
+        "gst_rate": c.gst_rate or 0.0,
+        "invoice_footer": c.invoice_footer or "",
+    }
 
 
 def user_out(session: Session, u: User) -> dict:
@@ -136,10 +163,52 @@ def sale_order_out(session: Session, so: SaleOrder) -> dict:
         "name": so.name,
         "partner_id": so.partner_id,
         "partner_name": _name(session, Partner, so.partner_id),
+        "partner_email": _attr(session, Partner, so.partner_id, "email"),
         "state": so.state.value,
         "order_date": so.order_date.isoformat() if so.order_date else None,
         "promise_date": so.promise_date.isoformat() if so.promise_date else None,
         "total": round(total, 2),
+        "lines": lines,
+    }
+
+
+def customer_return_out(session: Session, ret: CustomerReturn) -> dict:
+    """View of a customer return / RMA: the lines coming back, how they split
+    between restock and scrap, and the credit owed. While DRAFT the credit is a
+    live preview computed from the lines; once COMPLETED the stored total is the
+    record of what was actually credited."""
+    lines = []
+    credit = 0.0
+    for ln in ret.lines:
+        credit += ln.qty * ln.unit_price
+        lines.append(
+            {
+                "id": ln.id,
+                "sale_order_line_id": ln.sale_order_line_id,
+                "product_id": ln.product_id,
+                "product_name": _name(session, Product, ln.product_id),
+                "qty": ln.qty,
+                "qty_scrap": ln.qty_scrap,
+                "qty_restock": round(ln.qty - ln.qty_scrap, 4),
+                "unit_price": ln.unit_price,
+                "subtotal": round(ln.qty * ln.unit_price, 2),
+            }
+        )
+    so = session.get(SaleOrder, ret.sale_order_id)
+    completed = ret.state == ReturnState.COMPLETED
+    return {
+        "id": ret.id,
+        "name": ret.name,
+        "sale_order_id": ret.sale_order_id,
+        "sale_order_name": so.name if so else None,
+        "partner_id": ret.partner_id,
+        "partner_name": _name(session, Partner, ret.partner_id),
+        "partner_email": _attr(session, Partner, ret.partner_id, "email"),
+        "state": ret.state.value,
+        "reason": ret.reason,
+        "credit_total": round(ret.credit_total if completed else credit, 2),
+        "created_at": ret.created_at.isoformat() if ret.created_at else None,
+        "processed_at": ret.processed_at.isoformat() if ret.processed_at else None,
         "lines": lines,
     }
 
@@ -165,6 +234,7 @@ def purchase_order_out(session: Session, po: PurchaseOrder) -> dict:
         "name": po.name,
         "partner_id": po.partner_id,
         "partner_name": _name(session, Partner, po.partner_id),
+        "partner_email": _attr(session, Partner, po.partner_id, "email"),
         "state": po.state.value,
         "origin": po.origin,
         "order_date": po.order_date.isoformat() if po.order_date else None,

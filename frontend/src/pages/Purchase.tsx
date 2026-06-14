@@ -20,6 +20,7 @@ import {
   StateBadge,
 } from "@/components/ui";
 import { GRID_COLS, ListToolbar, NoResults, toOptions, useListControls } from "@/components/list-view";
+import { DocumentActions } from "@/components/DocumentActions";
 
 const PO_STATES = ["draft", "confirmed", "partially_received", "fully_received", "cancelled"];
 
@@ -310,9 +311,17 @@ function PODetail({ order, onClose }: { order: PurchaseOrder; onClose: () => voi
 
   return (
     <Modal open onClose={onClose} title={`${order.name} · ${order.partner_name || "Vendor"}`} wide>
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between gap-3">
         <StateBadge state={order.state} />
-        {order.origin && <Badge className="bg-blue-50 text-blue-600">Origin: {order.origin}</Badge>}
+        <div className="flex items-center gap-3">
+          {order.origin && <Badge className="bg-blue-50 text-blue-600">Origin: {order.origin}</Badge>}
+          <DocumentActions
+            recordId={order.id}
+            recordName={order.name}
+            defaultEmail={order.partner_email}
+            docs={[{ type: "purchase_order" }]}
+          />
+        </div>
       </div>
       <table className="w-full text-sm">
         <thead>

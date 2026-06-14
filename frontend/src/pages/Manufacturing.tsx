@@ -27,6 +27,7 @@ import {
   StateBadge,
 } from "@/components/ui";
 import { GRID_COLS, ListToolbar, NoResults, toOptions, useListControls } from "@/components/list-view";
+import { DocumentActions } from "@/components/DocumentActions";
 
 const MO_STATES = ["draft", "confirmed", "in_progress", "done", "cancelled"];
 
@@ -233,9 +234,16 @@ function MODetail({ mo, onClose }: { mo: ManufacturingOrder; onClose: () => void
 
   return (
     <Modal open onClose={onClose} title={`${mo.name} · ${fmtQty(mo.qty)} × ${mo.product_name}`} wide>
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between gap-3">
         <StateBadge state={mo.state} />
-        {mo.origin && <Badge className="bg-blue-50 text-blue-600">Origin: {mo.origin}</Badge>}
+        <div className="flex items-center gap-3">
+          {mo.origin && <Badge className="bg-blue-50 text-blue-600">Origin: {mo.origin}</Badge>}
+          <DocumentActions
+            recordId={mo.id}
+            recordName={mo.name}
+            docs={[{ type: "mo_traveler", label: "MO Traveler" }]}
+          />
+        </div>
       </div>
 
       {/* BoM explosion / component reservation view */}

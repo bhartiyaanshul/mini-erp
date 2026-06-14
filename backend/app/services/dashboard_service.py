@@ -1,8 +1,16 @@
+from collections import defaultdict
+from datetime import datetime, timedelta
+
 from sqlmodel import Session, select
 
-from app.models import ManufacturingOrder, Product, PurchaseOrder, SaleOrder, SaleOrderLine
-from app.models.enums import MOState, PurchaseOrderState, SaleOrderState
+from app.models import ManufacturingOrder, Product, PurchaseOrder, SaleOrder, SaleOrderLine, StockMove
+from app.models.enums import MOState, MoveSource, MoveState, MoveType, PurchaseOrderState, SaleOrderState
 from app.services import inventory_service
+
+# Trailing window for the trend chart and product-wise sales breakdown.
+TREND_DAYS = 30
+# How many products to surface in the "top products by sales" ranking.
+TOP_PRODUCTS = 6
 
 
 def get_metrics(session: Session, company_id: int) -> dict:
@@ -67,7 +75,9 @@ def get_metrics(session: Session, company_id: int) -> dict:
 
     stock_value = _stock_value(session, company_id)
     orchestration = _orchestration(session, sos, mos, pos)
+    analytics = _sales_purchase_analytics(session, company_id)
     return {
+        **analytics,
         "total_sales_orders": len(sos),
         "pending_deliveries": pending_deliveries,
         "manufacturing_orders": len(mos),
@@ -85,6 +95,91 @@ def get_metrics(session: Session, company_id: int) -> dict:
         "sales_by_state": _by_state(sos, SaleOrderState),
         "mo_by_state": _by_state(mos, MOState),
         "po_by_state": _by_state(pos, PurchaseOrderState),
+    }
+
+
+def _sales_purchase_analytics(session: Session, company_id: int) -> dict:
+    """Money flow, straight from the ledger — the same source of truth as stock.
+
+    Sales revenue  = Σ(done SALE out-moves × sales_price)
+    Purchase spend = Σ(done PURCHASE in-moves × cost_price)
+
+    The headline totals are all-time; the per-product breakdown and the daily
+    trend series are scoped to the trailing ``TREND_DAYS`` window so the charts
+    reflect recent activity. Prices live on the product (moves carry only qty),
+    which is exact here since prices are static — consistent with how the
+    forecast already reasons over the ledger.
+    """
+    products = {
+        p.id: p for p in session.exec(select(Product).where(Product.company_id == company_id)).all()
+    }
+    moves = session.exec(
+        select(StockMove).where(
+            StockMove.company_id == company_id,
+            StockMove.state == MoveState.DONE,
+            StockMove.source.in_((MoveSource.SALE, MoveSource.PURCHASE)),
+        )
+    ).all()
+
+    window_start = datetime.utcnow() - timedelta(days=TREND_DAYS)
+    total_sales = 0.0
+    total_purchase = 0.0
+    product_value: dict[int, float] = defaultdict(float)
+    product_qty: dict[int, float] = defaultdict(float)
+
+    # Pre-seed each day in the window so the trend line is continuous (no gaps).
+    daily: dict[str, dict[str, float]] = {
+        (window_start + timedelta(days=i)).date().isoformat(): {"sales": 0.0, "purchases": 0.0}
+        for i in range(TREND_DAYS + 1)
+    }
+
+    for m in moves:
+        product = products.get(m.product_id)
+        if not product:
+            continue
+        ts = m.done_at or m.created_at
+        in_window = bool(ts and ts >= window_start)
+        day_key = ts.date().isoformat() if ts else None
+
+        if m.source == MoveSource.SALE and m.move_type == MoveType.OUT:
+            value = m.qty * product.sales_price
+            total_sales += value
+            if in_window:
+                product_value[m.product_id] += value
+                product_qty[m.product_id] += m.qty
+                if day_key in daily:
+                    daily[day_key]["sales"] += value
+        elif m.source == MoveSource.PURCHASE and m.move_type == MoveType.IN:
+            value = m.qty * product.cost_price
+            total_purchase += value
+            if in_window and day_key in daily:
+                daily[day_key]["purchases"] += value
+
+    sales_by_product = sorted(
+        (
+            {
+                "product_id": pid,
+                "name": products[pid].name,
+                "sku": products[pid].sku,
+                "qty": round(product_qty[pid], 2),
+                "value": round(value, 2),
+            }
+            for pid, value in product_value.items()
+        ),
+        key=lambda r: r["value"],
+        reverse=True,
+    )[:TOP_PRODUCTS]
+
+    trend = [
+        {"date": day, "sales": round(v["sales"], 2), "purchases": round(v["purchases"], 2)}
+        for day, v in sorted(daily.items())
+    ]
+
+    return {
+        "total_sales_value": round(total_sales, 2),
+        "total_purchase_value": round(total_purchase, 2),
+        "sales_by_product": sales_by_product,
+        "sales_purchase_trend": trend,
     }
 
 
